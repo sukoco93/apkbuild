@@ -1,0 +1,8 @@
+# Mengabaikan file hasil generate lokal
+node_modules/
+platforms/
+plugins/
+*.log
+.gradle/
+build/
+  
