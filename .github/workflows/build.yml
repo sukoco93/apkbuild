@@ -1,0 +1,48 @@
+name: Build APK
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Gunakan versi v4 untuk checkout
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Setup Java 17 (Standar untuk Android SDK saat ini)
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # 3. Setup Node.js v20 (LTS terbaru yang stabil)
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # 4. Proses Build
+      - name: Build with Cordova
+        run: |
+          npm install -g cordova
+          cordova create myApp com.example.myapp MyApp
+          cd myApp
+          cordova platform add android
+          rm -rf www
+          cp -r ../www .
+          # Menambahkan gradle.properties agar build lebih stabil
+          echo "org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m" >> gradle.properties
+          cordova build android --debug
+
+      # 5. Gunakan v4 untuk upload artifact
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: myApp/platforms/android/app/build/outputs/apk/debug/app-debug.apk
+          
