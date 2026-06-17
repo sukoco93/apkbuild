@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Data Barang</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    body { max-width: 420px; margin: 0 auto; padding: 0 12px; }
+    .card { padding: 1rem; border-radius: 0.5rem; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+    .barang-item { cursor: pointer; transition: background 0.2s; }
+    .barang-item:hover { background: #f8f9fa; }
+    .notif { padding: 0.6rem; border-radius: 0.3rem; margin: 0.8rem 0; display: none; }
+    .notif.sukses { background: #d1e7dd; color: #0f5132; }
+    .notif.info { background: #cff4fc; color: #055160; }
+  </style>
+</head>
+<body x-data="dataBarang()">
+  <main class="container">
+    <h2 style="text-align:center; margin-top:1rem;">Daftar Barang</h2>
+
+    <!-- Notifikasi -->
+    <div x-show="pesan" x-bind:class="jenisNotif" class="notif" x-text="pesan"></div>
+
+    <!-- Form Tambah Barang -->
+    <div class="card">
+      <h3>Tambah Barang</h3>
+      <form @submit.prevent="simpanBarang">
+        <div class="grid">
+          <label>
+            Nama:
+            <input type="text" x-model="form.nama" required placeholder="Nama barang">
+          </label>
+          <label>
+            Harga (Rp):
+            <input type="number" x-model.number="form.harga" required min="0" placeholder="0">
+          </label>
+          <label>
+            Keuntungan (Rp):
+            <input type="number" x-model.number="form.keuntungan" required min="0" placeholder="0">
+          </label>
+        </div>
+        <button type="submit" class="primary" style="width:100%; margin-top:0.5rem;">Simpan</button>
+      </form>
+    </div>
+
+    <!-- Filter -->
+    <div class="card">
+      <label>Cari / Saring:</label>
+      <input type="text" x-model="kataKunci" placeholder="Ketik nama barang...">
+    </div>
+
+    <!-- Daftar Barang -->
+    <div class="card">
+      <h3>Daftar Barang</h3>
+      <div>
+        <template x-for="barang in daftarTerfilter()" :key="barang.id">
+          <div class="barang-item" style="padding:0.7rem; border-bottom:1px solid #eee;" @click="bukaEdit(barang)">
+            <strong x-text="barang.nama"></strong>
+            <br>
+            <small>Harga: Rp <span x-text="barang.harga.toLocaleString('id-ID')"></span>
+             — Untung: Rp <span x-text="barang.keuntungan.toLocaleString('id-ID')"></span></small>
+          </div>
+        </template>
+        <p x-show="daftarTerfilter().length === 0" style="color:#888; text-align:center;">Belum ada data atau tidak ditemukan</p>
+      </div>
+    </div>
+
+    <!-- Modal Edit & Hapus -->
+    <div x-show="bukaModal" style="position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:999;" @click.self="tutupModal">
+      <div style="background:white; width:92%; max-width:360px; padding:1.2rem; border-radius:0.5rem;">
+        <h3>Ubah / Hapus Barang</h3>
+        <form @submit.prevent="prosesUpdate">
+          <div class="grid">
+            <label>
+              Nama:
+              <input type="text" x-model="edit.nama" required>
+            </label>
+            <label>
+              Harga (Rp):
+              <input type="number" x-model.number="edit.harga" required min="0">
+            </label>
+            <label>
+              Keuntungan (Rp):
+              <input type="number" x-model.number="edit.keuntungan" required min="0">
+            </label>
+          </div>
+          <div style="display:flex; gap:0.5rem; margin-top:0.7rem;">
+            <button type="submit" class="primary" style="flex:1;">Update</button>
+            <button type="button" class="secondary" style="flex:1;" @click="hapusBarang">Hapus</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    function dataBarang() {
+      return {
+        daftar: [],
+        form: { nama: '', harga: 0, keuntungan: 0 },
+        kataKunci: '',
+
+        bukaModal: false,
+        edit: { id: '', nama: '', harga: 0, keuntungan: 0 },
+        dataAsli: {},
+
+        pesan: '',
+        jenisNotif: 'notif info',
+
+        // Baca saat mulai
+        init() {
+          const simpan = localStorage.getItem('dataBarang');
+          if (simpan) this.daftar = JSON.parse(simpan);
+        },
+        // Simpan setiap berubah
+        simpanKeLocal() {
+          localStorage.setItem('dataBarang', JSON.stringify(this.daftar));
+        },
+
+        buatId() {
+          return Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 10);
+        },
+
+        tampilPesan(teks, tipe = 'info') {
+          this.pesan = teks;
+          this.jenisNotif = tipe === 'sukses' ? 'notif sukses' : 'notif info';
+          setTimeout(() => this.pesan = '', 2500);
+        },
+
+        simpanBarang() {
+          const baru = {
+            id: this.buatId(),
+            nama: this.form.nama.trim(),
+            harga: this.form.harga,
+            keuntungan: this.form.keuntungan
+          };
+          this.daftar.push(baru);
+          this.simpanKeLocal(); // <-- simpan
+          this.form = { nama: '', harga: 0, keuntungan: 0 };
+          this.tampilPesan('Data barang disimpan', 'sukses');
+        },
+
+        daftarTerfilter() {
+          const kunci = this.kataKunci.toLowerCase().trim();
+          if (!kunci) return this.daftar;
+          return this.daftar.filter(b => b.nama.toLowerCase().includes(kunci));
+        },
+
+        bukaEdit(barang) {
+          this.edit = { ...barang };
+          this.dataAsli = { ...barang };
+          this.bukaModal = true;
+        },
+
+        tutupModal() {
+          this.bukaModal = false;
+          this.edit = { id: '', nama: '', harga: 0, keuntungan: 0 };
+          this.dataAsli = {};
+        },
+
+        prosesUpdate() {
+          const sama =
+            this.edit.nama.trim() === this.dataAsli.nama &&
+            this.edit.harga === this.dataAsli.harga &&
+            this.edit.keuntungan === this.dataAsli.keuntungan;
+
+          if (sama) {
+            this.tampilPesan('Data tidak berubah — tidak diperbarui');
+            return;
+          }
+
+          const pos = this.daftar.findIndex(b => b.id === this.edit.id);
+          if (pos !== -1) {
+            this.daftar[pos] = { ...this.edit, nama: this.edit.nama.trim() };
+            this.simpanKeLocal(); // <-- simpan
+            this.tutupModal();
+            this.tampilPesan('Data diperbarui', 'sukses');
+          }
+        },
+
+        hapusBarang() {
+          this.daftar = this.daftar.filter(b => b.id !== this.edit.id);
+          this.simpanKeLocal(); // <-- simpan
+          this.tutupModal();
+          this.tampilPesan('Data dihapus', 'sukses');
+        }
+      }
+    }
+  </script>
+</body>
+</html>

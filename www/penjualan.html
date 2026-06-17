@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Data Penjualan</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    body { max-width: 420px; margin: 0 auto; padding: 0 12px; }
+    .card { padding: 1rem; border-radius: 0.5rem; background: var(--pico-card-background-color); box-shadow: var(--pico-card-box-shadow); margin-bottom: 1rem; }
+    .item-transaksi { cursor: pointer; transition: background 0.2s; padding: 0.7rem; border-bottom: 1px solid var(--pico-muted-border-color); }
+    .item-transaksi:hover { background: var(--pico-card-sectioning-background-color); }
+    .notif { padding: 0.6rem; border-radius: 0.3rem; margin: 0.8rem 0; display: none; }
+    .notif.sukses { background: #d1e7dd; color: #0f5132; }
+    .notif.info { background: #cff4fc; color: #055160; }
+    .autocomplete { position: relative; }
+    .autocomplete-list { position: absolute; top: 100%; left: 0; right: 0; background: var(--pico-card-background-color); border: 1px solid var(--pico-muted-border-color); z-index: 10; border-radius: 0 0 0.3rem 0.3rem; max-height: 120px; overflow-y: auto; }
+    .autocomplete-item { padding: 0.5rem; cursor: pointer; }
+    .autocomplete-item:hover { background: var(--pico-card-sectioning-background-color); }
+    /* Lebar kolom nama diperlebar */
+    .baris-barang { display: grid; grid-template-columns: 2.2fr 0.7fr auto; gap: 0.4rem; align-items: end; margin-bottom: 0.5rem; }
+    .wa-btn { background:#25d366; color:white; border:none; }
+    .wa-btn:hover { background:#20bd5a; }
+  </style>
+</head>
+<body x-data="dataPenjualan()">
+  <main class="container">
+    <h2 style="text-align:center; margin-top:1rem;">Data Penjualan</h2>
+
+    <!-- Notifikasi -->
+    <div x-show="pesan" x-bind:class="jenisNotif" class="notif" x-text="pesan"></div>
+
+    <!-- Form Tambah Penjualan -->
+    <div class="card">
+      <h3>Catat Penjualan</h3>
+      <form @submit.prevent="simpanPenjualan">
+        <div class="grid">
+          <label>
+            Tanggal:
+            <input type="date" x-model="form.tgl" required>
+          </label>
+          <label class="autocomplete">
+            Nama Member:
+            <input type="text" x-model="form.namaTeks" required @focus="bukaSaranMember" @input="filterSaranMember" @blur="tutupSaranMember()" placeholder="Pilih / ketik nama">
+            <div class="autocomplete-list" x-show="tampilSaranMember">
+              <template x-for="m in saranMember" :key="m.id">
+                <div class="autocomplete-item" @click="pilihMember(m)" x-text="`${m.nama} (…${m.id.slice(-4)})`"></div>
+              </template>
+            </div>
+          </label>
+        </div>
+
+        <div style="margin-top:0.8rem;">
+          <strong>Daftar Barang:</strong>
+          <template x-for="(brg, idx) in daftarBaris" :key="idx">
+            <div class="baris-barang">
+              <div class="autocomplete">
+                <input type="text" x-model="brg.barangTeks" required @focus="bukaSaranBarang(idx)" @input="filterSaranBarang(idx)" @blur="tutupSaranBarang(idx)" placeholder="Pilih barang">
+                <div class="autocomplete-list" x-show="brg.saranBuka">
+                  <template x-for="b in brg.saranFilter" :key="b.id">
+                    <div class="autocomplete-item" @click="pilihBarang(idx,b)" x-text="`${b.nama} — Rp ${b.harga.toLocaleString('id-ID')}`"></div>
+                  </template>
+                </div>
+              </div>
+              <input type="number" x-model.number="brg.qty" required min="1" placeholder="Jml" @input="hitungPerBaris(idx)">
+              <button type="button" class="secondary" @click="hapusBaris(idx)">−</button>
+              <div style="grid-column: 1 / 4; font-size:0.85rem; color:var(--pico-muted-color);">
+                Subtotal: Rp <span x-text="brg.subtotal.toLocaleString('id-ID')"></span>
+              </div>
+            </div>
+          </template>
+          <button type="button" class="outline" style="width:100%; margin-top:0.4rem;" @click="tambahBaris()">+ Tambah Barang</button>
+        </div>
+
+        <div style="margin-top:0.8rem; border-top:1px solid var(--pico-muted-border-color); padding-top:0.8rem;">
+          <p><strong>Total Keseluruhan:</strong> Rp <span x-text="totalSemua.toLocaleString('id-ID')"></span></p>
+        </div>
+
+        <button type="submit" class="primary" style="width:100%; margin-top:0.5rem;">Simpan Transaksi</button>
+      </form>
+    </div>
+
+    <!-- Filter -->
+    <div class="card">
+      <label>Saring Data:</label>
+      <input type="text" x-model="kataKunci" placeholder="Tanggal, nama, barang…">
+    </div>
+
+    <!-- Daftar Transaksi -->
+    <div class="card">
+      <h3>Daftar Transaksi</h3>
+      <div>
+        <template x-for="trx in daftarTerfilter()" :key="trx.id">
+          <div class="item-transaksi" @click="bukaEdit(trx)">
+            <strong x-text="trx.namaMember"></strong>
+            <small style="display:block;">
+              Tgl: <span x-text="trx.tgl"></span> •
+              Jumlah Jenis Barang: <span x-text="trx.detail.length"></span>
+            </small>
+            <small style="display:block; color:var(--pico-muted-color);">
+              Total: Rp <span x-text="parseInt(trx.total).toLocaleString('id-ID')"></span>
+            </small>
+          </div>
+        </template>
+        <p x-show="daftarTerfilter().length === 0" style="color:#888; text-align:center;">Belum ada transaksi atau tidak ditemukan</p>
+      </div>
+    </div>
+
+    <!-- Modal Edit, Hapus & Kirim WA -->
+    <div x-show="bukaModal" style="position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:999; padding:0.5rem; overflow:auto;" @click.self="tutupModal">
+      <div style="background:var(--pico-card-background-color); width:96%; max-width:400px; padding:1rem; border-radius:0.5rem;">
+        <h3>Ubah / Hapus / Kirim</h3>
+        <form @submit.prevent="prosesUpdate">
+          <div class="grid">
+            <label>
+              Tanggal:
+              <input type="date" x-model="edit.tgl" required>
+            </label>
+            <label class="autocomplete">
+              Nama Member:
+              <input type="text" x-model="edit.namaTeks" required @focus="bukaSaranMemberEdit" @input="filterSaranMemberEdit" @blur="tutupSaranMemberEdit()">
+              <div class="autocomplete-list" x-show="tampilSaranMemberEdit">
+                <template x-for="m in saranMemberEdit" :key="m.id">
+                  <div class="autocomplete-item" @click="pilihMemberEdit(m)" x-text="`${m.nama} (…${m.id.slice(-4)})`"></div>
+                </template>
+              </div>
+            </label>
+          </div>
+
+          <div style="margin-top:0.5rem;">
+            <strong>Barang:</strong>
+            <template x-for="(brg, idx) in editBaris" :key="idx">
+              <div class="baris-barang">
+                <div class="autocomplete">
+                  <input type="text" x-model="brg.barangTeks" required @focus="bukaSaranBarangEdit(idx)" @input="filterSaranBarangEdit(idx)" @blur="tutupSaranBarangEdit(idx)">
+                  <div class="autocomplete-list" x-show="brg.saranBuka">
+                    <template x-for="b in brg.saranFilter" :key="b.id">
+                      <div class="autocomplete-item" @click="pilihBarangEdit(idx,b)" x-text="`${b.nama} — Rp ${b.harga.toLocaleString('id-ID')}`"></div>
+                    </template>
+                  </div>
+                </div>
+                <input type="number" x-model.number="brg.qty" required min="1" @input="hitungPerBarisEdit(idx)">
+                <button type="button" class="secondary" @click="hapusBarisEdit(idx)">−</button>
+                <div style="grid-column: 1 / 4; font-size:0.8rem;">
+                  Subtotal: Rp <span x-text="brg.subtotal.toLocaleString('id-ID')"></span>
+                </div>
+              </div>
+            </template>
+            <button type="button" class="outline" style="width:100%; margin-top:0.3rem;" @click="tambahBarisEdit()">+ Barang</button>
+          </div>
+
+          <p style="margin-top:0.7rem;"><strong>Total: Rp <span x-text="totalEdit.toLocaleString('id-ID')"></span></strong></p>
+
+          <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
+            <button type="submit" class="primary" style="flex:1;">Update</button>
+            <button type="button" class="secondary" style="flex:1;" @click="hapusTransaksi">Hapus</button>
+            <button type="button" class="wa-btn" style="flex:1;" @click="kirimWA()">WA</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    function dataPenjualan() {
+      return {
+        daftar: [],
+        daftarMember: [],
+        daftarBarang: [],
+
+        form: { tgl: '', memberId: '', namaTeks: '' },
+        daftarBaris: [],
+
+        bukaModal: false,
+        edit: { id: '', tgl: '', memberId: '', namaTeks: '' },
+        editBaris: [],
+        dataAsli: {},
+
+        kataKunci: '',
+        tampilSaranMember: false, saranMember: [],
+        tampilSaranMemberEdit: false, saranMemberEdit: [],
+
+        pesan: '', jenisNotif: 'notif info',
+
+        init() {
+          const simpanTrx = localStorage.getItem('dataPenjualan');
+          if (simpanTrx) this.daftar = JSON.parse(simpanTrx);
+          const simpanMember = localStorage.getItem('dataMember');
+          if (simpanMember) this.daftarMember = JSON.parse(simpanMember);
+          const simpanBarang = localStorage.getItem('dataBarang');
+          if (simpanBarang) this.daftarBarang = JSON.parse(simpanBarang);
+
+          const hariIni = new Date();
+          this.form.tgl = hariIni.toISOString().split('T')[0];
+          this.tambahBaris();
+        },
+
+        simpanKeLocal() { localStorage.setItem('dataPenjualan', JSON.stringify(this.daftar)); },
+        buatId() { return Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 10); },
+        tampilPesan(teks, tipe = 'info') { this.pesan = teks; this.jenisNotif = tipe === 'sukses' ? 'notif sukses' : 'notif info'; setTimeout(() => this.pesan = '', 2500); },
+
+        // Saran member
+        bukaSaranMember() { this.saranMember = [...this.daftarMember]; this.tampilSaranMember = true; },
+        filterSaranMember() { this.saranMember = this.daftarMember.filter(m => m.nama.toLowerCase().includes(this.form.namaTeks.toLowerCase())); this.tampilSaranMember = true; },
+        tutupSaranMember() { setTimeout(() => this.tampilSaranMember = false, 200); },
+        pilihMember(m) { this.form.memberId = m.id; this.form.namaTeks = `${m.nama} (…${m.id.slice(-4)})`; this.tampilSaranMember = false; },
+
+        bukaSaranMemberEdit() { this.saranMemberEdit = [...this.daftarMember]; this.tampilSaranMemberEdit = true; },
+        filterSaranMemberEdit() { this.saranMemberEdit = this.daftarMember.filter(m => m.nama.toLowerCase().includes(this.edit.namaTeks.toLowerCase())); this.tampilSaranMemberEdit = true; },
+        tutupSaranMemberEdit() { setTimeout(() => this.tampilSaranMemberEdit = false, 200); },
+        pilihMemberEdit(m) { this.edit.memberId = m.id; this.edit.namaTeks = `${m.nama} (…${m.id.slice(-4)})`; this.tampilSaranMemberEdit = false; },
+
+        // Baris barang tambah
+        tambahBaris() { this.daftarBaris.push({ barangId: '', barangTeks: '', hargaSatuan: 0, untungSatuan: 0, qty: 1, subtotal: 0, untung: 0, saranBuka: false, saranFilter: [] }); },
+        hapusBaris(idx) { if (this.daftarBaris.length > 1) this.daftarBaris.splice(idx, 1); },
+        bukaSaranBarang(idx) { this.daftarBaris[idx].saranFilter = [...this.daftarBarang]; this.daftarBaris[idx].saranBuka = true; },
+        filterSaranBarang(idx) { const k = this.daftarBaris[idx].barangTeks.toLowerCase(); this.daftarBaris[idx].saranFilter = this.daftarBarang.filter(b => b.nama.toLowerCase().includes(k)); this.daftarBaris[idx].saranBuka = true; },
+        tutupSaranBarang(idx) { setTimeout(() => { if (this.daftarBaris[idx]) this.daftarBaris[idx].saranBuka = false; }, 200); },
+        pilihBarang(idx, b) { this.daftarBaris[idx].barangId = b.id; this.daftarBaris[idx].barangTeks = b.nama; this.daftarBaris[idx].hargaSatuan = b.harga; this.daftarBaris[idx].untungSatuan = b.keuntungan; this.daftarBaris[idx].saranBuka = false; this.hitungPerBaris(idx); },
+        hitungPerBaris(idx) { const b = this.daftarBaris[idx]; b.subtotal = b.hargaSatuan * b.qty; b.untung = b.untungSatuan * b.qty; },
+        get totalSemua() { return this.daftarBaris.reduce((jml, b) => jml + b.subtotal, 0); },
+
+        simpanPenjualan() {
+          const detail = this.daftarBaris.map(b => ({ barangId: b.barangId, namaBarang: b.barangTeks, hargaSatuan: b.hargaSatuan, untungSatuan: b.untungSatuan, qty: b.qty, subtotal: b.subtotal, untung: b.untung }));
+          const baru = { id: this.buatId(), tgl: this.form.tgl, memberId: this.form.memberId, namaMember: this.form.namaTeks.replace(/\s\(….*\)/, ''), detail, total: this.totalSemua, keuntungan: this.daftarBaris.reduce((j, b) => j + b.untung, 0) };
+          this.daftar.push(baru); this.simpanKeLocal();
+          this.form = { tgl: this.form.tgl, memberId: '', namaTeks: '' }; this.daftarBaris = []; this.tambahBaris();
+          this.tampilPesan('Transaksi tersimpan', 'sukses');
+        },
+
+        // ✅ Perbaikan utama: bukaEdit pastikan barangTeks terisi
+        bukaEdit(trx) {
+  this.edit = { 
+    id: trx.id, 
+    tgl: trx.tgl, 
+    memberId: trx.memberId, 
+    namaTeks: trx.namaMember || '' // <-- kuncinya: isi namaTeks
+  };
+  this.dataAsli = JSON.stringify(trx);
+  this.editBaris = trx.detail.map(d => ({
+    barangId: d.barangId,
+    barangTeks: d.namaBarang || '',
+    hargaSatuan: d.hargaSatuan,
+    untungSatuan: d.untungSatuan,
+    qty: d.qty,
+    subtotal: d.subtotal,
+    saranBuka: false,
+    saranFilter: [...this.daftarBarang]
+  }));
+  this.bukaModal = true;
+},
+        tutupModal() { this.bukaModal = false; this.edit = {}; this.editBaris = []; this.dataAsli = {}; },
+
+        tambahBarisEdit() { this.editBaris.push({ barangId: '', barangTeks: '', hargaSatuan: 0, untungSatuan: 0, qty: 1, subtotal: 0, saranBuka: false, saranFilter: [...this.daftarBarang] }); },
+        hapusBarisEdit(idx) { if (this.editBaris.length > 1) this.editBaris.splice(idx, 1); },
+        // ✅ Perbaikan ambil daftar barang yang benar
+        bukaSaranBarangEdit(idx) { this.editBaris[idx].saranFilter = [...this.daftarBarang]; this.editBaris[idx].saranBuka = true; },
+        filterSaranBarangEdit(idx) { const k = this.editBaris[idx].barangTeks.toLowerCase(); this.editBaris[idx].saranFilter = this.daftarBarang.filter(b => b.nama.toLowerCase().includes(k)); this.editBaris[idx].saranBuka = true; },
+        tutupSaranBarangEdit(idx) { setTimeout(() => { if (this.editBaris[idx]) this.editBaris[idx].saranBuka = false; }, 200); },
+        pilihBarangEdit(idx, b) { this.editBaris[idx].barangId = b.id; this.editBaris[idx].barangTeks = b.nama; this.editBaris[idx].hargaSatuan = b.harga; this.editBaris[idx].untungSatuan = b.keuntungan; this.editBaris[idx].saranBuka = false; this.hitungPerBarisEdit(idx); },
+        hitungPerBarisEdit(idx) { const b = this.editBaris[idx]; b.subtotal = b.hargaSatuan * b.qty; },
+        get totalEdit() { return this.editBaris.reduce((jml, b) => jml + b.subtotal, 0); },
+
+        prosesUpdate() {
+          const dataBaru = { id: this.edit.id, tgl: this.edit.tgl, memberId: this.edit.memberId, namaMember: this.edit.namaTeks, detail: this.editBaris, total: this.totalEdit, keuntungan: this.editBaris.reduce((j, b) => j + (b.untungSatuan * b.qty), 0) };
+          if (JSON.stringify(dataBaru) === this.dataAsli) { this.tampilPesan('Data tidak berubah — tidak diperbarui'); return; }
+          const pos = this.daftar.findIndex(t => t.id === this.edit.id);
+          if (pos !== -1) { this.daftar[pos] = dataBaru; this.simpanKeLocal(); this.tutupModal(); this.tampilPesan('Data diperbarui', 'sukses'); }
+        },
+
+        hapusTransaksi() { this.daftar = this.daftar.filter(t => t.id !== this.edit.id); this.simpanKeLocal(); this.tutupModal(); this.tampilPesan('Data dihapus', 'sukses'); },
+
+        kirimWA() {
+  const isi = "```\n" +
+    `Tanggal: ${this.edit.tgl}\n` +
+    `Member: ${this.edit.namaTeks || 'Tanpa Nama'}\n` +
+    "Barang:\n" +
+    this.editBaris.map(b => `- ${b.barangTeks || 'Tanpa Nama'} x${b.qty} = Rp ${b.subtotal.toLocaleString('id-ID')}`).join("\n") + "\n" +
+    `Total: Rp ${this.totalEdit.toLocaleString('id-ID')}\n` +
+    "```";
+  const url = "https://wa.me/?text=" + encodeURIComponent(isi);
+  window.open(url, "_blank");
+},
+
+        daftarTerfilter() {
+          const kunci = this.kataKunci.toLowerCase().trim();
+          if (!kunci) return this.daftar;
+          return this.daftar.filter(trx =>
+            trx.tgl.includes(kunci) || trx.namaMember.toLowerCase().includes(kunci) || trx.detail.some(d => d.namaBarang.toLowerCase().includes(kunci))
+          );
+        }
+      }
+    }
+  </script>
+</body>
+</html>

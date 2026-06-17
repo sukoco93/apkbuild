@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Daftar Member</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    body { max-width: 420px; margin: 0 auto; padding: 0 12px; }
+    .card { padding: 1rem; border-radius: 0.5rem; background: var(--pico-card-background-color); box-shadow: var(--pico-card-box-shadow); margin-bottom: 1rem; }
+    .member-item { cursor: pointer; transition: background 0.2s; padding: 0.7rem; border-bottom: 1px solid var(--pico-muted-border-color); }
+    .member-item:hover { background: var(--pico-card-sectioning-background-color); }
+    .notif { padding: 0.6rem; border-radius: 0.3rem; margin: 0.8rem 0; display: none; }
+    .notif.sukses { background: #d1e7dd; color: #0f5132; }
+    .notif.info { background: #cff4fc; color: #055160; }
+    .autocomplete { position: relative; }
+    .autocomplete-list { position: absolute; top: 100%; left: 0; right: 0; background: var(--pico-card-background-color); border: 1px solid var(--pico-muted-border-color); z-index: 10; border-radius: 0 0 0.3rem 0.3rem; max-height: 120px; overflow-y: auto; }
+    .autocomplete-item { padding: 0.5rem; cursor: pointer; }
+    .autocomplete-item:hover { background: var(--pico-card-sectioning-background-color); }
+    .tree-container { overflow-x: auto; font-family: monospace; white-space: pre; padding: 1rem; background: var(--pico-card-background-color); border-radius: var(--pico-border-radius); }
+    .highlight { background: yellow; color: black; font-weight: bold; border-radius: 2px; }
+    .node { display: block; }
+  </style>
+</head>
+<body x-data="dataMember()">
+  <main class="container">
+    <h2 style="text-align:center; margin-top:1rem;">Daftar Member</h2>
+
+    <!-- Notifikasi -->
+    <div x-show="pesan" x-bind:class="jenisNotif" class="notif" x-text="pesan"></div>
+
+    <!-- Form Tambah Member -->
+    <div class="card">
+      <h3>Tambah Member</h3>
+      <form @submit.prevent="simpanMember">
+        <div class="grid">
+          <label>
+            Nama:
+            <input type="text" x-model="form.nama" required placeholder="Nama lengkap">
+          </label>
+          <label class="autocomplete">
+            Upline (boleh kosong):
+            <input type="text" x-model="form.uplineTeks" @focus="bukaSaran" @input="filterSaran" @blur="tutupSaran()" placeholder="Ketik nama upline">
+            <div class="autocomplete-list" x-show="tampilSaran">
+              <template x-for="m in saranUpline" :key="m.id">
+                <div class="autocomplete-item" @click="pilihUpline(m)" x-text="`${m.nama} (…${m.id.slice(-4)})`"></div>
+              </template>
+            </div>
+          </label>
+          <label>
+            No. HP (boleh kosong):
+            <input type="tel" x-model="form.hpTeks" placeholder="08xx-xxxx-xxxx" maxlength="14">
+          </label>
+          <label>
+            Alamat (boleh kosong):
+            <textarea x-model="form.alamat" rows="2" placeholder="Alamat lengkap"></textarea>
+          </label>
+        </div>
+        <button type="submit" class="primary" style="width:100%; margin-top:0.5rem;">Simpan</button>
+      </form>
+    </div>
+
+    <!-- Filter -->
+    <div class="card">
+      <label>Cari / Saring:</label>
+      <input type="text" x-model="kataKunci" placeholder="Nama, HP, alamat…">
+    </div>
+
+    <!-- Daftar Member -->
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+        <h3 style="margin:0;">Daftar Member</h3>
+        <button class="outline" @click="bukaPohon = true">Pohon Jaringan</button>
+      </div>
+      <div>
+        <template x-for="m in daftarTerfilter()" :key="m.id">
+          <div class="member-item" @click="bukaEdit(m)">
+            <strong x-text="m.nama"></strong>
+            <small style="display:block;">
+              ID: …<span x-text="m.id.slice(-4)"></span>
+              <span x-show="m.hpTeks"> • HP: <span x-text="m.hpTeks"></span></span>
+            </small>
+          </div>
+        </template>
+        <p x-show="daftarTerfilter().length === 0" style="color:#888; text-align:center;">Belum ada data atau tidak ditemukan</p>
+      </div>
+    </div>
+
+    <!-- Modal Edit -->
+    <div x-show="bukaModal" style="position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:999;" @click.self="tutupModal">
+      <div style="background:var(--pico-card-background-color); width:92%; max-width:360px; padding:1.2rem; border-radius:0.5rem;">
+        <h3>Ubah / Hapus Member</h3>
+        <form @submit.prevent="prosesUpdate">
+          <div class="grid">
+            <label>
+              Nama:
+              <input type="text" x-model="edit.nama" required>
+            </label>
+            <label class="autocomplete">
+              Upline (boleh kosong):
+              <input type="text" x-model="edit.uplineTeks" @focus="bukaSaranEdit" @input="filterSaranEdit" @blur="tutupSaranEdit()">
+              <div class="autocomplete-list" x-show="tampilSaranEdit">
+                <template x-for="m in saranUplineEdit" :key="m.id">
+                  <div class="autocomplete-item" @click="pilihUplineEdit(m)" x-text="`${m.nama} (…${m.id.slice(-4)})`"></div>
+                </template>
+              </div>
+            </label>
+            <label>
+              No. HP (boleh kosong):
+              <input type="tel" x-model="edit.hpTeks" maxlength="14">
+            </label>
+            <label>
+              Alamat (boleh kosong):
+              <textarea x-model="edit.alamat" rows="2"></textarea>
+            </label>
+          </div>
+          <div style="display:flex; gap:0.5rem; margin-top:0.7rem;">
+            <button type="submit" class="primary" style="flex:1;">Update</button>
+            <button type="button" class="secondary" style="flex:1;" @click="hapusMember">Hapus</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal Pohon Jaringan -->
+    <div x-show="bukaPohon" style="position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:999; padding:1rem; overflow:auto;" @click.self="bukaPohon=false">
+      <div style="background:var(--pico-card-background-color); width:98%; max-width:400px; border-radius:0.5rem; padding:1rem;">
+        <h3>Pohon Jaringan</h3>
+        <input type="text" placeholder="Cari nama/ID…" x-model="cariPohon" @input="updateSorot">
+        <div class="tree-container">
+          <template x-for="baris in susunPohon()" :key="baris.id">
+            <span class="node" :class="baris.sorot ? 'highlight' : ''" x-text="baris.teks"></span>
+          </template>
+        </div>
+        <small><em>Menampilkan nama, sorot menampilkan 4 digit akhir ID</em></small>
+        <button class="outline" style="width:100%; margin-top:0.7rem;" @click="bukaPohon=false">Tutup</button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    function dataMember() {
+      return {
+        daftar: [],
+        form: { nama: '', uplineId: '', uplineTeks: '', hp: '', hpTeks: '', alamat: '' },
+        kataKunci: '',
+        tampilSaran: false,
+        saranUpline: [],
+        tampilSaranEdit: false,
+        saranUplineEdit: [],
+
+        bukaModal: false,
+        edit: { id: '', nama: '', uplineId: '', uplineTeks: '', hp: '', hpTeks: '', alamat: '' },
+        dataAsli: {},
+
+        bukaPohon: false,
+        cariPohon: '',
+        pohonStruktur: {},
+
+        pesan: '',
+        jenisNotif: 'notif info',
+
+        init() {
+          const simpan = localStorage.getItem('dataMember');
+          if (simpan) this.daftar = JSON.parse(simpan);
+        },
+        simpanKeLocal() {
+          localStorage.setItem('dataMember', JSON.stringify(this.daftar));
+        },
+        buatId() {
+          return Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 10);
+        },
+        formatHpTeks(nomor) {
+          if (!nomor) return '';
+          let bersih = nomor.replace(/\D/g, '');
+          if (bersih.startsWith('62')) bersih = '0' + bersih.slice(2);
+          return bersih.replace(/(\d{4})(?=\d)/g, '$1-');
+        },
+        simpanHpMentah(teks) {
+          if (!teks) return '';
+          let bersih = teks.replace(/\D/g, '');
+          if (bersih.startsWith('0')) bersih = '62' + bersih.slice(1);
+          return bersih;
+        },
+        tampilPesan(teks, tipe = 'info') {
+          this.pesan = teks;
+          this.jenisNotif = tipe === 'sukses' ? 'notif sukses' : 'notif info';
+          setTimeout(() => this.pesan = '', 2500);
+        },
+
+        // Saran upline
+        bukaSaran() { this.saranUpline = this.daftar.filter(m => m.id !== this.form.id); this.tampilSaran = true; },
+        filterSaran() { this.saranUpline = this.daftar.filter(m => m.nama.toLowerCase().includes(this.form.uplineTeks.toLowerCase()) && m.id !== this.form.id); this.tampilSaran = true; },
+        tutupSaran() { setTimeout(() => this.tampilSaran = false, 200); },
+        pilihUpline(m) { this.form.uplineId = m.id; this.form.uplineTeks = `${m.nama} (…${m.id.slice(-4)})`; this.tampilSaran = false; },
+
+        bukaSaranEdit() { this.saranUplineEdit = this.daftar.filter(m => m.id !== this.edit.id); this.tampilSaranEdit = true; },
+        filterSaranEdit() { this.saranUplineEdit = this.daftar.filter(m => m.nama.toLowerCase().includes(this.edit.uplineTeks.toLowerCase()) && m.id !== this.edit.id); this.tampilSaranEdit = true; },
+        tutupSaranEdit() { setTimeout(() => this.tampilSaranEdit = false, 200); },
+        pilihUplineEdit(m) { this.edit.uplineId = m.id; this.edit.uplineTeks = `${m.nama} (…${m.id.slice(-4)})`; this.tampilSaranEdit = false; },
+
+        simpanMember() {
+          const baru = {
+            id: this.buatId(),
+            nama: this.form.nama.trim(),
+            uplineId: this.form.uplineId || '',
+            uplineTeks: this.form.uplineTeks || '',
+            hp: this.simpanHpMentah(this.form.hpTeks),
+            hpTeks: this.formatHpTeks(this.form.hpTeks),
+            alamat: this.form.alamat.trim()
+          };
+          this.daftar.push(baru);
+          this.simpanKeLocal();
+          this.form = { nama: '', uplineId: '', uplineTeks: '', hp: '', hpTeks: '', alamat: '' };
+          this.tampilPesan('Data member disimpan', 'sukses');
+        },
+
+        daftarTerfilter() {
+          const kunci = this.kataKunci.toLowerCase().trim();
+          if (!kunci) return this.daftar;
+          return this.daftar.filter(m =>
+            m.nama.toLowerCase().includes(kunci) ||
+            m.id.slice(-4).includes(kunci) ||
+            m.hpTeks.includes(kunci) ||
+            m.alamat.toLowerCase().includes(kunci)
+          );
+        },
+
+        bukaEdit(m) {
+          this.edit = { ...m };
+          this.dataAsli = { ...m };
+          this.bukaModal = true;
+        },
+        tutupModal() {
+          this.bukaModal = false;
+          this.edit = { id: '', nama: '', uplineId: '', uplineTeks: '', hp: '', hpTeks: '', alamat: '' };
+          this.dataAsli = {};
+        },
+
+        prosesUpdate() {
+          const sama =
+            this.edit.nama.trim() === this.dataAsli.nama &&
+            this.edit.uplineId === this.dataAsli.uplineId &&
+            this.edit.hp === this.dataAsli.hp &&
+            this.edit.alamat.trim() === this.dataAsli.alamat;
+          if (sama) { this.tampilPesan('Data tidak berubah — tidak diperbarui'); return; }
+
+          const pos = this.daftar.findIndex(m => m.id === this.edit.id);
+          if (pos !== -1) {
+            this.daftar[pos] = {
+              ...this.edit,
+              nama: this.edit.nama.trim(),
+              alamat: this.edit.alamat.trim()
+            };
+            this.simpanKeLocal();
+            this.tutupModal();
+            this.tampilPesan('Data diperbarui', 'sukses');
+          }
+        },
+
+        hapusMember() {
+          this.daftar = this.daftar.filter(m => m.id !== this.edit.id);
+          this.simpanKeLocal();
+          this.tutupModal();
+          this.tampilPesan('Data dihapus', 'sukses');
+        },
+
+        // Pohon jaringan
+        bangunPohon() {
+          this.pohonStruktur = {};
+          this.daftar.forEach(m => {
+            if (m.uplineId) {
+              if (!this.pohonStruktur[m.uplineId]) this.pohonStruktur[m.uplineId] = [];
+              this.pohonStruktur[m.uplineId].push(m);
+            }
+          });
+        },
+        cariAnggota(id) { return this.daftar.find(m => m.id === id); },
+        updateSorot() {},
+        susunPohon() {
+          this.bangunPohon();
+          let hasil = [];
+          const kunci = this.cariPohon.toLowerCase().trim();
+          const sorot = (id) => kunci && (id.slice(-4).includes(kunci) || this.cariAnggota(id)?.nama.toLowerCase().includes(kunci));
+
+          const susun = (id, awalan = '', terakhir = true) => {
+            const anak = this.pohonStruktur[id] || [];
+            anak.forEach((anakId, i) => {
+              const terakhirAnak = i === anak.length - 1;
+              const awalanAnak = awalan + (terakhir ? '    ' : '│   ');
+              const sambung = terakhirAnak ? '└── ' : '├── ';
+              const anggota = this.cariAnggota(anakId.id || anakId);
+              hasil.push({
+                id: anggota.id,
+                teks: awalan + sambung + anggota.nama + (sorot(anggota.id) ? ` (…${anggota.id.slice(-4)})` : ''),
+                sorot: sorot(anggota.id)
+              });
+              susun(anggota.id, awalanAnak, terakhirAnak);
+            });
+          };
+
+          const akar = this.daftar.find(m => !m.uplineId);
+          if (akar) hasil.push({ id: akar.id, teks: akar.nama + (sorot(akar.id) ? ` (…${akar.id.slice(-4)})` : ''), sorot: sorot(akar.id) });
+          if (akar) susun(akar.id);
+          return hasil;
+        }
+      }
+    }
+  </script>
+</body>
+</html>

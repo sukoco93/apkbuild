@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Saldo & Penarikan</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    body { max-width: 420px; margin: 0 auto; padding: 0 12px; }
+    .card { padding: 1rem; border-radius: 0.5rem; background: var(--pico-card-background-color); box-shadow: var(--pico-card-box-shadow); margin-bottom: 1rem; }
+    .item-saldo { padding: 0.7rem; border-bottom: 1px solid var(--pico-muted-border-color); cursor:pointer; transition:background 0.2s; }
+    .item-saldo:hover { background: var(--pico-card-sectioning-background-color); }
+    .item-riwayat { padding: 0.7rem; border-bottom: 1px dashed #ddd; }
+    .item-riwayat:last-child { border-bottom: none; }
+    .notif { padding: 0.6rem; border-radius: 0.3rem; margin: 0.8rem 0; display: none; }
+    .notif.sukses { background: #d1e7dd; color: #0f5132; }
+    .notif.salah { background: #f8d7da; color: #842029; }
+    .angka-kanan { text-align: right; }
+    .modal-wrap { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:999; padding:0.8rem; overflow-y:auto; }
+    .modal-box { background:var(--pico-card-background-color); width:100%; max-width:360px; border-radius:0.5rem; margin:1rem 0; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+    .wa-btn { background:#25d366; color:white; border:none; }
+    .wa-btn:hover { background:#20bd5a; }
+    .header-bar { display:flex; justify-content:space-between; align-items:center; margin-top:1rem; margin-bottom:0.5rem; }
+  </style>
+</head>
+<body x-data="dataSaldo()">
+  <main class="container">
+    <!-- Header: Judul + Tombol Riwayat di Kanan -->
+    <div class="header-bar">
+      <h2 style="margin:0;">Saldo</h2>
+      <button class="outline" @click="bukaRiwayat = true">Riwayat Penarikan</button>
+    </div>
+
+    <div x-show="pesan" x-bind:class="jenisNotif" class="notif" x-text="pesan"></div>
+
+    <!-- Filter Member -->
+    <div class="card">
+      <label>Saring Member:</label>
+      <input type="text" x-model="kataKunci" placeholder="Nama member…">
+    </div>
+
+    <!-- Daftar Saldo Member -->
+    <div class="card">
+      <h3>Daftar Member</h3>
+      <div>
+        <template x-for="m in daftarTerfilter()" :key="m.id">
+          <div class="item-saldo" @click="bukaEdit(m)">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <strong x-text="m.nama"></strong>
+              <span class="angka-kanan" style="color:var(--pico-primary);">Rp <span x-text="m.saldo.toLocaleString('id-ID')"></span></span>
+            </div>
+            <small style="display:block;">
+              Total Bonus: Rp <span x-text="m.totalBonus.toLocaleString('id-ID')"></span> •
+              Penarikan: Rp <span x-text="m.totalTarik.toLocaleString('id-ID')"></span>
+            </small>
+          </div>
+        </template>
+        <p x-show="daftarTerfilter().length === 0" style="color:#888; text-align:center;">Belum ada data</p>
+      </div>
+    </div>
+
+    <!-- MODAL RIWAYAT PENARIKAN -->
+    <div x-show="bukaRiwayat" class="modal-wrap" @click.self="bukaRiwayat=false">
+      <div class="modal-box">
+        <div style="padding:1rem;">
+          <h3 style="margin-top:0;">Riwayat Penarikan</h3>
+          <label style="margin-bottom:0.4rem;">Saring:</label>
+          <input type="text" x-model="kataKunciRiwayat" placeholder="Tanggal / nama…" style="margin-bottom:0.6rem;">
+
+          <div style="max-height:320px; overflow-y:auto;">
+            <template x-for="r in riwayatTerfilter()" :key="r.id">
+              <div class="item-riwayat">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <strong x-text="r.nama"></strong>
+                  <span class="angka-kanan" style="color:#b52e31;">−Rp <span x-text="r.nilai.toLocaleString('id-ID')"></span></span>
+                </div>
+                <small style="display:block;">
+                  Tgl: <span x-text="r.tgl"></span> •
+                  Saldo Akhir: Rp <span x-text="r.saldoAkhir.toLocaleString('id-ID')"></span>
+                </small>
+              </div>
+            </template>
+            <p x-show="riwayatTerfilter().length === 0" style="color:#888; text-align:center;">Belum ada penarikan</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL EDIT PENARIKAN -->
+    <div x-show="bukaModal" class="modal-wrap" @click.self="bukaModal=false">
+      <div class="modal-box">
+        <div style="padding:1rem;">
+          <h3 style="margin-top:0;">Penarikan: <span x-text="edit.nama"></span></h3>
+          <form @submit.prevent="prosesUpdate">
+            <div class="grid-2">
+              <div>
+                <p style="margin:0.2rem 0; font-size:0.9rem;">Total Bonus:<br><strong>Rp <span x-text="edit.totalBonus.toLocaleString('id-ID')"></span></strong></p>
+                <p style="margin:0.2rem 0; font-size:0.9rem;">Saldo Sebelum:<br><strong>Rp <span x-text="edit.saldoSebelum.toLocaleString('id-ID')"></span></strong></p>
+              </div>
+              <div>
+                <label style="font-size:0.9rem;">Nilai Tarik:
+                  <input type="number" x-model.number="edit.nilaiTarik" min="0" :max="edit.saldoSebelum" required>
+                </label>
+                <p style="margin:0.2rem 0; font-size:0.9rem;">Saldo Akhir:<br><strong>Rp <span x-text="edit.saldoAkhir.toLocaleString('id-ID')"></span></strong></p>
+              </div>
+            </div>
+
+            <div style="display:flex; gap:0.5rem; margin-top:0.8rem;">
+              <button type="submit" class="primary" style="flex:1;">Update</button>
+              <button type="button" class="wa-btn" style="flex:1;" @click="kirimWA()">Kirim WA</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    function dataSaldo() {
+      return {
+        daftarBonus: [],
+        daftarMember: [],
+        riwayatTarik: [],
+        kataKunci: '',
+        kataKunciRiwayat: '',
+
+        bukaModal: false,
+        bukaRiwayat: false, // kontrol modal riwayat
+        edit: { id:'', nama:'', totalBonus:0, totalTarik:0, saldoSebelum:0, nilaiTarik:0, saldoAkhir:0, daftarBonusTrx:[] },
+
+        pesan: '', jenisNotif: 'notif info',
+
+        init() {
+          this.daftarBonus = JSON.parse(localStorage.getItem('dataBonus') || '[]');
+          this.daftarMember = JSON.parse(localStorage.getItem('dataMember') || '[]');
+          this.riwayatTarik = JSON.parse(localStorage.getItem('dataRiwayatTarik') || '[]');
+        },
+
+        tampilPesan(teks, tipe = 'info') {
+          this.pesan = teks;
+          this.jenisNotif = 'notif ' + tipe;
+          setTimeout(() => this.pesan = '', 2500);
+        },
+
+        hitungTotalBonusMember(idMember) {
+          const m = this.daftarMember.find(mb => mb.id === idMember);
+          if (!m) return 0;
+          const semua = this.daftarBonus.filter(b => b.namaPenerima === m.nama);
+          return Math.floor(semua.reduce((j, b) => j + b.nilai, 0));
+        },
+
+        hitungTotalTarikMember(idMember) {
+          return this.riwayatTarik.filter(r => r.memberId === idMember).reduce((j, r) => j + r.nilai, 0);
+        },
+
+        bukaEdit(m) {
+          const totalBonus = this.hitungTotalBonusMember(m.id);
+          const totalTarik = this.hitungTotalTarikMember(m.id);
+          const saldoSebelum = totalBonus - totalTarik;
+
+          const daftarTrx = this.daftarBonus
+            .filter(b => b.namaPenerima === m.nama)
+            .map(b => ({ tgl:b.tgl, level:b.level, nilai:b.nilai }));
+
+          this.edit = {
+            id: m.id,
+            nama: m.nama,
+            totalBonus: totalBonus,
+            totalTarik: totalTarik,
+            saldoSebelum: saldoSebelum,
+            nilaiTarik: 0,
+            saldoAkhir: saldoSebelum,
+            daftarBonusTrx: daftarTrx
+          };
+          this.bukaModal = true;
+        },
+
+        get saldoAkhirEdit() {
+          const tarik = Math.max(0, this.edit.nilaiTarik || 0);
+          return this.edit.saldoSebelum - tarik;
+        },
+prosesUpdate() {
+  const tarik = Number(this.edit.nilaiTarik) || 0;
+
+  // ✅ Cek: tidak boleh 0
+  if (tarik <= 0) {
+    this.tampilPesan('Nilai penarikan harus lebih dari 0', 'salah');
+    return;
+  }
+  if (tarik > this.edit.saldoSebelum) {
+    this.tampilPesan('Penarikan melebihi saldo', 'salah');
+    return;
+  }
+
+  const baru = {
+    id: Date.now().toString(36),
+    memberId: this.edit.id,
+    nama: this.edit.nama,
+    tgl: new Date().toISOString().split('T')[0],
+    nilai: tarik,
+    saldoSebelum: this.edit.saldoSebelum,
+    saldoAkhir: this.saldoAkhirEdit
+  };
+  this.riwayatTarik.push(baru);
+  localStorage.setItem('dataRiwayatTarik', JSON.stringify(this.riwayatTarik));
+
+  this.tampilPesan('Penarikan dicatat', 'sukses');
+  this.bukaModal = false;
+},
+
+        
+        kirimWA() {
+          const daftarBaris = this.edit.daftarBonusTrx
+            .map(x => `- +Rp ${x.nilai.toLocaleString('id-ID')} | Tgl ${x.tgl} | Lv${x.level}`)
+            .join("\n");
+
+          const isi = "```\n" +
+            `Tanggal: ${new Date().toISOString().split('T')[0]}\n` +
+            `Member: ${this.edit.nama}\n` +
+            `Daftar Bonus (+):\n${daftarBaris || '- Tidak ada'}\n` +
+            `Saldo Sebelum Penarikan: +Rp ${this.edit.saldoSebelum.toLocaleString('id-ID')}\n` +
+            `Penarikan: -Rp ${(this.edit.nilaiTarik||0).toLocaleString('id-ID')}\n` +
+            `Saldo Akhir: Rp ${this.saldoAkhirEdit.toLocaleString('id-ID')}\n` +
+            "```";
+
+          const url = "https://wa.me/?text=" + encodeURIComponent(isi);
+          window.open(url, "_blank");
+        },
+
+        daftarTerfilter() {
+          const kunci = this.kataKunci.toLowerCase().trim();
+          let arr = this.daftarMember.map(m => {
+            const totalBonus = this.hitungTotalBonusMember(m.id);
+            const totalTarik = this.hitungTotalTarikMember(m.id);
+            return {
+              id: m.id,
+              nama: m.nama,
+              totalBonus: totalBonus,
+              totalTarik: totalTarik,
+              saldo: totalBonus - totalTarik
+            };
+          });
+          if (kunci) arr = arr.filter(x => x.nama.toLowerCase().includes(kunci));
+          return arr.sort((a,b) => a.nama.localeCompare(b.nama));
+        },
+
+        riwayatTerfilter() {
+          const kunci = this.kataKunciRiwayat.toLowerCase().trim();
+          let arr = [...this.riwayatTarik];
+          if (kunci) arr = arr.filter(r => r.tgl.includes(kunci) || r.nama.toLowerCase().includes(kunci));
+          arr.sort((a, b) => b.tgl.localeCompare(a.tgl));
+          return arr;
+        }
+      }
+    }
+  </script>
+</body>
+</html>
