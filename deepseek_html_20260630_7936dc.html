@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes" />
+    <title>Aplikasi Bisnis</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com">
+    </script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js">
+    </script>
+    <!-- Dexie.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dexie/3.2.4/dexie.min.js">
+    </script>
+
+    <style>
+        /* Toast */
+        .toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-width: 350px;
+            width: 100%;
+        }
+        .toast {
+            background: #1e293b;
+            color: #f8fafc;
+            padding: 12px 18px;
+            border-radius: 8px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: slideIn 0.3s ease;
+        }
+        .toast-success {
+            border-left: 4px solid #22c55e;
+        }
+        .toast-error {
+            border-left: 4px solid #ef4444;
+        }
+        .toast-warning {
+            border-left: 4px solid #f59e0b;
+        }
+        .toast-info {
+            border-left: 4px solid #3b82f6;
+        }
+        .toast .toast-close {
+            margin-left: auto;
+            cursor: pointer;
+            opacity: 0.7;
+            padding: 0 4px;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* Spinner */
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 0.6s linear infinite;
+        }
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Touch target */
+        .btn-sm {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.85rem;
+        }
+
+        @media (max-width: 640px) {
+            .table-wrap {
+                font-size: 0.75rem;
+            }
+            .table-wrap th,
+            .table-wrap td {
+                padding: 0.4rem 0.2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div x-data="app()" x-init="init()" class="container mx-auto p-3 max-w-6xl">
+
+        <!-- Toast container -->
+        <div class="toast-container" id="toastContainer"></div>
+
+        <!-- TAB -->
+        <div class="overflow-x-auto whitespace-nowrap mb-4 border-b pb-2 flex-nowrap">
+            <div class="flex gap-2">
+                <template x-for="tab in ['Barang', 'Pelanggan', 'Penjualan', 'Kas', 'Produksi']">
+                    <button @click="switchTab(tab)" x-text="tab"
+                    :class="activeTab === tab ? 'bg-blue-600 text-white' : 'bg-gray-200 hover:bg-gray-300'"
+                    class="px-4 py-2 rounded-lg font-semibold transition shrink-0 text-sm md:text-base">
+                </button>
+            </template>
+        </div>
+    </div>
+
+    <!-- ===== FORM INPUT ===== -->
+    <div class="bg-gray-50 p-3 rounded-lg shadow mb-4 border">
+
+        <!-- FORM GENERIK (Barang, Pelanggan, Kas) -->
+        <div x-show="!['Penjualan', 'Produksi'].includes(activeTab)">
+            <!-- SALDO KAS - sederhana: Saldo, Keluar, Masuk -->
+            <div x-show="activeTab === 'Kas'" class="w-full mb-2 p-1 bg-blue-50 rounded border border-blue-200 text-sm flex flex-wrap gap-3 items-center">
+                <span class="font-semibold">Saldo Kas :</span>
+                <span class="text-green-600">Masuk : <span x-text="formatAngka(saldoMasuk)"></span></span>
+                <span class="text-red-600">Keluar : <span x-text="formatAngka(saldoKeluar)"></span></span>
+                <span class="font-bold text-blue-800">Saldo : <span x-text="formatAngka(saldoMasuk - saldoKeluar)"></span></span>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+                <template x-for="field in getFields()" :key="field.key">
+                    <div x-show="field.key !== 'tgl'">
+                        <input x-model="formData[field.key]"
+                        :type="field.type || 'text'"
+                        :placeholder="field.label"
+                        :list="field.key + 'List'"
+                        class="border p-1 rounded text-sm w-28 md:w-32" />
+                        <datalist :id="field.key + 'List'">
+                            <template x-for="opt in getAutocomplete(field.key)" :key="opt">
+                                <option :value="opt"></option>
+                            </template>
+                        </datalist>
+                    </div>
+                    <div x-show="field.key === 'tgl'">
+                        <input x-model="formData[field.key]"
+                        type="date"
+                        :placeholder="field.label"
+                        class="border p-1 rounded text-sm w-28 md:w-32" />
+                    </div>
+                </template>
+                <button @click="simpanData" :disabled="loading" class="bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 text-sm flex items-center gap-1">
+                    <span x-show="loading"><span class="spinner"></span></span>
+                    <span x-show="!loading"><i class="fa-solid fa-save"></i></span>
+                    <span x-text="editId ? 'Update' : 'Simpan'"></span>
+                </button>
+                <button @click="hapusData" x-show="editId" :disabled="loading" class="bg-red-500 text-white px-3 py-2 rounded-lg hover:bg-red-600 text-sm">
+                    <i class="fa-solid fa-trash"></i> Hapus
+                </button>
+                <button @click="resetForm" x-show="editId" class="bg-gray-400 text-white px-3 py-2 rounded-lg hover:bg-gray-500 text-sm">
+                    <i class="fa-solid fa-times"></i> Batal
+                </button>
+            </div>
+        </div>
+
+        <!-- ===== FORM KHUSUS PENJUALAN ===== -->
+        <div x-show="activeTab === 'Penjualan'">
+            <div class="flex flex-wrap items-center gap-2">
+                <input x-model="formPenjualan.tgl" type="date" class="border p-1 rounded text-sm w-28 md:w-32" />
+                <input x-model="formPenjualan.nama"
+                placeholder="Nama Pelanggan"
+                list="pelangganList"
+                class="border p-1 rounded text-sm w-32 md:w-36" />
+                <datalist id="pelangganList">
+                    <template x-for="p in semuaPelanggan" :key="p.id">
+                        <option :value="p.nama"></option>
+                    </template>
+                </datalist>
+
+                <input x-model="formPenjualan.barangInput"
+                @input="updateHargaDariBarang()"
+                placeholder="Barang"
+                list="barangList"
+                class="border p-1 rounded text-sm w-28" />
+                <datalist id="barangList">
+                    <template x-for="b in semuaBarang" :key="b.id">
+                        <option :value="b.nama"></option>
+                    </template>
+                </datalist>
+
+                <input x-model.number="formPenjualan.qty"
+                type="number" placeholder="Qty"
+                class="border p-1 rounded text-sm w-16" />
+
+                <input x-model.number="formPenjualan.harga"
+                type="number" placeholder="Harga"
+                class="border p-1 rounded text-sm w-24" />
+
+                <button @click="tambahItemPenjualan" class="bg-blue-500 text-white px-3 py-2 rounded-lg text-sm hover:bg-blue-600">
+                    <i class="fa-solid fa-plus"></i> Tambah
+                </button>
+                <button @click="kirimWAPenjualan" class="bg-green-500 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-600">
+                    <i class="fa-brands fa-whatsapp"></i> WA Nota
+                </button>
+            </div>
+
+            <!-- Daftar Item -->
+            <div class="mt-2 table-wrap overflow-x-auto">
+                <table class="w-full text-sm border">
+                    <thead class="bg-gray-200">
+                        <tr>
+                            <th class="p-1 text-left">Barang</th>
+                            <th class="p-1 text-center">Qty</th>
+                            <th class="p-1 text-right">Harga</th>
+                            <th class="p-1 text-right">Subtotal</th>
+                            <th class="p-1 text-center">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="(item, idx) in listPenjualan" :key="idx">
+                            <tr class="border-b">
+                                <td class="p-1" x-text="item.barang"></td>
+                                <td class="p-1 text-center" x-text="item.qty"></td>
+                                <td class="p-1 text-right" x-text="formatAngka(item.harga)"></td>
+                                <td class="p-1 text-right" x-text="formatAngka(item.qty * item.harga)"></td>
+                                <td class="p-1 text-center">
+                                    <button @click="hapusItemPenjualan(idx)" class="text-red-500 hover:text-red-700 text-sm">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                        <tr x-show="listPenjualan.length === 0">
+                            <td colspan="5" class="p-2 text-center text-gray-400">Belum ada item</td>
+                        </tr>
+                        <tr x-show="listPenjualan.length > 0">
+                            <td colspan="3" class="p-2 text-right font-bold">Total</td>
+                            <td class="p-2 text-right font-bold" x-text="formatAngka(totalPenjualan)"></td>
+                            <td></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Tombol Simpan Penjualan -->
+            <div class="flex gap-2 mt-2 flex-wrap">
+                <button @click="simpanPenjualan" :disabled="loading" class="bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 text-sm flex items-center gap-1">
+                    <span x-show="loading"><span class="spinner"></span></span>
+                    <span x-show="!loading"><i class="fa-solid fa-save"></i></span>
+                    Simpan Penjualan
+                </button>
+                <button @click="resetFormPenjualan" class="bg-gray-400 text-white px-3 py-2 rounded-lg hover:bg-gray-500 text-sm">
+                    <i class="fa-solid fa-times"></i> Batal
+                </button>
+                <button @click="hapusPenjualan" x-show="editPenjualanId" class="bg-red-500 text-white px-3 py-2 rounded-lg hover:bg-red-600 text-sm">
+                    <i class="fa-solid fa-trash"></i> Hapus
+                </button>
+            </div>
+        </div>
+
+        <!-- ===== FORM KHUSUS PRODUKSI ===== -->
+        <div x-show="activeTab === 'Produksi'">
+            <div class="flex flex-wrap items-center gap-2">
+                <input x-model="formProduksi.tgl" type="date" class="border p-1 rounded text-sm w-28 md:w-32" />
+                <span class="text-sm font-semibold">Kedelai</span>
+                <input x-model.number="formProduksi.qtyKedelai" type="number" placeholder="Qty" class="border p-1 rounded text-sm w-16" />
+                <span class="text-sm font-semibold">Tempe</span>
+                <input x-model.number="formProduksi.qtyTempe" type="number" placeholder="Qty" class="border p-1 rounded text-sm w-16" />
+                <button @click="simpanProduksi" :disabled="loading" class="bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 text-sm flex items-center gap-1">
+                    <span x-show="loading"><span class="spinner"></span></span>
+                    <span x-show="!loading"><i class="fa-solid fa-save"></i></span>
+                    Simpan
+                </button>
+                <button @click="resetFormProduksi" class="bg-gray-400 text-white px-3 py-2 rounded-lg hover:bg-gray-500 text-sm">
+                    <i class="fa-solid fa-times"></i> Batal
+                </button>
+                <button @click="hapusProduksi" x-show="editProduksiId" class="bg-red-500 text-white px-3 py-2 rounded-lg hover:bg-red-600 text-sm">
+                    <i class="fa-solid fa-trash"></i> Hapus
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SEARCH + SHARE -->
+    <div class="flex flex-wrap gap-2 items-center mb-2">
+        <input type="text"
+        x-model="keyword"
+        @input="keyword = keyword.toLowerCase()"
+        placeholder="🔍 Cari data..."
+        class="flex-1 border p-2 rounded-lg shadow-sm" />
+
+        <div class="relative" x-data="{ open: false }">
+            <button @click="open = !open" class="bg-gray-200 hover:bg-gray-300 px-3 py-2 rounded-lg text-sm">
+                <i class="fa-solid fa-share-from-square"></i> Share
+            </button>
+            <div x-show="open" @click.away="open = false"
+            class="absolute right-0 mt-1 bg-white border rounded-lg shadow-lg z-10 w-40">
+            <button @click="exportCSV; open=false" class="block w-full text-left px-4 py-2 hover:bg-gray-100 text-sm">
+                <i class="fa-solid fa-file-csv"></i> CSV
+            </button>
+            <button @click="backupData; open=false" class="block w-full text-left px-4 py-2 hover:bg-gray-100 text-sm">
+                <i class="fa-solid fa-download"></i> Backup
+            </button>
+            <button @click="document.getElementById('fileInput').click(); open=false" class="block w-full text-left px-4 py-2 hover:bg-gray-100 text-sm">
+                <i class="fa-solid fa-upload"></i> Restore
+            </button>
+        </div>
+        <input type="file" id="fileInput" accept=".json" class="hidden" @change="restoreData($event)" />
+    </div>
+</div>
+
+<!-- TABEL -->
+<div class="overflow-x-auto bg-white rounded-lg shadow border table-wrap">
+    <table class="w-full text-sm">
+        <thead class="bg-gray-100">
+            <tr>
+                <template x-for="col in getColumns()" :key="col">
+                    <th class="p-2 text-left font-semibold capitalize" x-text="col"></th>
+                </template>
+            </tr>
+        </thead>
+        <tbody>
+            <template x-for="item in dataFiltered" :key="item.id">
+                <tr class="border-b hover:bg-gray-50 cursor-pointer" @dblclick="editData(item)">
+                    <template x-for="col in getColumns()" :key="col">
+                        <td class="p-2" x-text="formatCell(item, col)"></td>
+                    </template>
+                </tr>
+            </template>
+            <tr x-show="dataFiltered.length === 0">
+                <td :colspan="getColumns().length" class="p-4 text-center text-gray-400">
+                    <i class="fa-solid fa-inbox"></i> Tidak ada data
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+<div class="text-xs text-gray-400 mt-2">Total: <span x-text="dataFiltered.length"></span> data</div>
+</div>
+
+<script>
+    // =====================================================================
+    //  1. HELPER FUNCTIONS
+    // =====================================================================
+    const Helpers = {
+        today() {
+            return new Date().toISOString().slice(0, 10);
+        },
+        formatTanggal(tgl) {
+            if (!tgl) return '-';
+            const d = new Date(tgl);
+            return d.getDate() + '/' + (d.getMonth() + 1) + '/' + String(d.getFullYear()).slice(-2);
+        },
+        formatAngka(angka) {
+            if (angka === null || angka === undefined || isNaN(angka)) return '0';
+            return Math.round(angka).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        },
+        toast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+            const icons = {
+                success: 'fa-check-circle',
+                error: 'fa-exclamation-circle',
+                warning: 'fa-triangle-exclamation',
+                info: 'fa-info-circle'
+            };
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.innerHTML = `
+                    <span class="toast-icon"><i class="fa-solid ${icons[type] || icons.info}"></i></span>
+                    <span>${message}</span>
+                    <span class="toast-close" onclick="this.parentElement.remove()">&times;</span>
+                `;
+            container.appendChild(toast);
+            setTimeout(() => {
+                if (toast.parentElement) toast.remove();
+            }, 4000);
+        },
+        isValidHp(hp) {
+            return /^[0-9]{10,15}$/.test(String(hp));
+        }
+    };
+
+    // =====================================================================
+    //  2. DATABASE (Dexie) with singleton & auto cleanup duplicates
+    // =====================================================================
+    const DB = {
+        db: null,
+        _initPromise: null,
+
+        async init() {
+            if (this._initPromise) return this._initPromise;
+
+            this._initPromise = (async () => {
+                if (this.db && this.db.isOpen()) {
+                    await this.ensureDefaultBarang();
+                    await this.cleanupDuplicates();
+                    return;
+                }
+
+                this.db = new Dexie('AplikasiBisnisKu');
+                // Versi 1
+                this.db.version(1).stores({
+                    barang: '++id, nama, qty, harga',
+                    pelanggan: '++id, nama, hp',
+                    penjualan: '++id, tgl, pelanggan, total, detail',
+                    kas: '++id, tgl, keterangan, nominal',
+                    produksi: '++id, tgl, qtyKedelai, qtyTempe'
+                });
+                // Versi 2 (indeks sama, hanya untuk migrasi jika dibutuhkan)
+                this.db.version(2).stores({
+                    barang: '++id, nama, qty, harga',
+                    pelanggan: '++id, nama, hp',
+                    penjualan: '++id, tgl, pelanggan, total, detail',
+                    kas: '++id, tgl, keterangan, nominal',
+                    produksi: '++id, tgl, qtyKedelai, qtyTempe'
+                }).upgrade(() => {});
+
+                await this.db.open();
+                await this.ensureDefaultBarang();
+                await this.cleanupDuplicates();
+            })();
+
+            return this._initPromise;
+        },
+
+        async ensureDefaultBarang() {
+            const db = this.db;
+            const names = ['kedelai', 'tempe', 'retur'];
+            for (const nama of names) {
+                const count = await db.barang.where('nama').equals(nama).count();
+                if (count === 0) {
+                    await db.barang.add({ nama, qty: 0, harga: 0 });
+                }
+            }
+        },
+
+        async cleanupDuplicates() {
+            const db = this.db;
+            const all = await db.barang.toArray();
+            const seen = new Map();
+            const toDelete = [];
+            for (const item of all) {
+                if (seen.has(item.nama)) {
+                    toDelete.push(item.id);
+                } else {
+                    seen.set(item.nama, item.id);
+                }
+            }
+            for (const id of toDelete) {
+                await db.barang.delete(id);
+            }
+            if (toDelete.length > 0) {
+                console.log(`🧹 Duplikat dihapus: ${toDelete.length} data`);
+            }
+        },
+
+        async getAll(tabel) {
+            return await this.db[tabel].toArray();
+        },
+
+        async add(tabel, data) {
+            if (tabel === 'pelanggan') {
+                if (data.nama) {
+                    const existing = await this.db.pelanggan.where('nama').equals(data.nama).first();
+                    if (existing) {
+                        Helpers.toast('⚠️ Nama pelanggan "' + data.nama + '" sudah ada!', 'warning');
+                        return false;
+                    }
+                }
+                if (data.hp && !Helpers.isValidHp(data.hp)) {
+                    Helpers.toast('⚠️ Format HP tidak valid (10-15 digit angka)', 'error');
+                    return false;
+                }
+            }
+            if (tabel === 'barang') {
+                if (!data.nama) {
+                    Helpers.toast('⚠️ Nama barang wajib diisi!', 'error');
+                    return false;
+                }
+                if (data.qty !== undefined && data.qty < 0) {
+                    Helpers.toast('⚠️ Qty tidak boleh negatif!', 'error');
+                    return false;
+                }
+            }
+            await this.db[tabel].add(data);
+            return true;
+        },
+
+        async update(tabel, id, data) {
+            delete data.id;
+            await this.db[tabel].update(id, data);
+            return true;
+        },
+
+        async delete(tabel, id) {
+            if (!confirm(`Yakin hapus data ini dari tabel "${tabel}"?`)) return false;
+            await this.db[tabel].delete(id);
+            return true;
+        }
+    };
+
+    // =====================================================================
+    //  3. ALPINE APP
+    // =====================================================================
+    function app() {
+        return {
+            // State
+            activeTab: 'Barang',
+            keyword: '',
+            data: [],
+            formData: {},
+            editId: null,
+            loading: false,
+
+            semuaPelanggan: [],
+            semuaBarang: [],
+
+            // Penjualan
+            formPenjualan: { tgl: '', nama: '', barangInput: 'tempe', qty: 1, harga: 0 },
+            listPenjualan: [],
+            editPenjualanId: null,
+
+            // Produksi
+            formProduksi: { tgl: '', qtyKedelai: 0, qtyTempe: 0 },
+            editProduksiId: null,
+
+            // ===== INISIALISASI =====
+            async init() {
+                await DB.init(); // singleton, hanya sekali
+                this.formPenjualan.tgl = Helpers.today();
+                this.formProduksi.tgl = Helpers.today();
+                await this.loadData();
+                await this.loadAutocomplete();
+                this.setDefaultPenjualan();
+                // Tidak ada toast startup
+            },
+
+            // ===== SWITCH TAB =====
+            async switchTab(tab) {
+                this.activeTab = tab;
+                this.resetForm();
+                this.keyword = '';
+                await this.loadData();
+                if (tab === 'Penjualan') this.setDefaultPenjualan();
+            },
+
+            // ===== LOAD DATA =====
+            async loadData() {
+                try {
+                    const tabel = this.activeTab.toLowerCase();
+                    this.data = await DB.getAll(tabel);
+                } catch (e) {
+                    Helpers.toast('Gagal load data: ' + e.message, 'error');
+                    console.error(e);
+                }
+            },
+
+            async loadAutocomplete() {
+                try {
+                    this.semuaPelanggan = await DB.getAll('pelanggan');
+                    this.semuaBarang = await DB.getAll('barang');
+                } catch (e) {
+                    console.error(e);
+                }
+            },
+
+            // ===== DATA FILTER (pencarian efisien) =====
+            get dataFiltered() {
+                if (!this.keyword) return this.data;
+                const lower = this.keyword;
+                return this.data.filter(item => {
+                    const fields = this.getColumns();
+                    for (let f of fields) {
+                        let val = item[f];
+                        if (val === null || val === undefined) continue;
+                        if (typeof val === 'number') val = String(val);
+                        if (String(val).toLowerCase().includes(lower)) return true;
+                    }
+                    if (this.activeTab === 'Penjualan' && item.detail) {
+                        try {
+                            const detail = JSON.parse(item.detail);
+                            for (let d of detail) {
+                                if (String(d.barang).toLowerCase().includes(lower)) return true;
+                            }
+                        } catch (e) {}
+                    }
+                    return false;
+                });
+            },
+
+            // ===== FIELDS & COLUMNS =====
+            getFields() {
+                const map = {
+                    'Barang': [{ key: 'nama', label: 'Nama' }, { key: 'qty', label: 'Qty', type: 'number' },
+                    { key: 'harga', label: 'Harga', type: 'number' }],
+                    'Pelanggan': [{ key: 'nama', label: 'Nama' }, { key: 'hp', label: 'HP' }],
+                    'Kas': [{ key: 'tgl', label: 'Tgl' }, { key: 'keterangan', label: 'Ket' },
+                    { key: 'nominal', label: 'Nominal', type: 'number' }]
+                };
+                return map[this.activeTab] || [];
+            },
+
+            getColumns() {
+                const map = {
+                    'Barang': ['nama', 'qty', 'harga'],
+                    'Pelanggan': ['nama', 'hp'],
+                    'Penjualan': ['tgl', 'pelanggan', 'barang', 'total'],
+                    'Kas': ['tgl', 'keterangan', 'nominal'],
+                    'Produksi': ['tgl', 'qtyKedelai', 'qtyTempe']
+                };
+                return map[this.activeTab] || [];
+            },
+
+            // ===== FORMAT CELL =====
+            formatCell(item, col) {
+                if (col === 'tgl') return Helpers.formatTanggal(item.tgl);
+                if (col === 'harga' || col === 'total' || col === 'nominal') return Helpers.formatAngka(item[col]);
+                if (col === 'barang') {
+                    if (!item.detail) return '-';
+                    try {
+                        const detail = JSON.parse(item.detail);
+                        return detail.map(d => d.barang + ' ' + d.qty).join(', ');
+                    } catch { return '-'; }
+                }
+                return item[col] ?? '-';
+            },
+
+            // ===== AUTOCOMPLETE =====
+            getAutocomplete(key) {
+                if (key === 'nama' && this.activeTab === 'Barang') {
+                    return this.semuaBarang.map(b => b.nama);
+                }
+                if (key === 'nama' && this.activeTab === 'Pelanggan') {
+                    return this.semuaPelanggan.map(p => p.nama);
+                }
+                if (key === 'keterangan') {
+                    return this.data.map(d => d.keterangan).filter(Boolean);
+                }
+                return [];
+            },
+
+            // ===== SALDO KAS (ganti nama) =====
+            get saldoMasuk() {
+                if (this.activeTab !== 'Kas') return 0;
+                return this.data.filter(d => (d.nominal || 0) > 0)
+                    .reduce((sum, d) => sum + (d.nominal || 0), 0);
+            },
+
+            get saldoKeluar() {
+                if (this.activeTab !== 'Kas') return 0;
+                return this.data.filter(d => (d.nominal || 0) < 0)
+                    .reduce((sum, d) => sum + Math.abs(d.nominal || 0), 0);
+            },
+
+            // ===== RESET FORM =====
+            resetForm() {
+                this.formData = {};
+                this.editId = null;
+                this.resetFormPenjualan();
+                this.resetFormProduksi();
+            },
+
+            resetFormPenjualan() {
+                this.formPenjualan = { tgl: Helpers.today(), nama: '', barangInput: 'tempe', qty: 1, harga: 0 };
+                this.listPenjualan = [];
+                this.editPenjualanId = null;
+                this.updateHargaDariBarang();
+            },
+
+            resetFormProduksi() {
+                this.formProduksi = { tgl: Helpers.today(), qtyKedelai: 0, qtyTempe: 0 };
+                this.editProduksiId = null;
+            },
+
+            // ===== DEFAULT PENJUALAN =====
+            setDefaultPenjualan() {
+                this.formPenjualan.barangInput = 'tempe';
+                this.updateHargaDariBarang();
+            },
+
+            updateHargaDariBarang() {
+                const nama = this.formPenjualan.barangInput;
+                if (!nama) { this.formPenjualan.harga = 0; return; }
+                const barang = this.semuaBarang.find(b => b.nama === nama);
+                this.formPenjualan.harga = barang ? (barang.harga || 0) : 0;
+            },
+
+            // ===== CRUD GENERIK =====
+            bersihkanData(data) {
+                const clean = {};
+                this.getFields().forEach(f => {
+                    let val = data[f.key];
+                    if (val === undefined) val = null;
+                    clean[f.key] = val;
+                });
+                return clean;
+            },
+
+            isDataSama(data1, data2) {
+                const keys = this.getFields().map(f => f.key);
+                for (let k of keys) {
+                    if (data1[k] !== data2[k]) return false;
+                }
+                return true;
+            },
+
+            async simpanData() {
+                const tabel = this.activeTab.toLowerCase();
+                if (this.getFields().some(f => f.key === 'tgl') && !this.formData.tgl) {
+                    this.formData.tgl = Helpers.today();
+                }
+                const dataBersih = this.bersihkanData(this.formData);
+                const isEmpty = this.getFields().every(f => {
+                    const v = dataBersih[f.key];
+                    return v === '' || v === null || v === undefined;
+                });
+                if (isEmpty) { Helpers.toast('⚠️ Form masih kosong!', 'warning'); return; }
+
+                if (tabel === 'pelanggan' && dataBersih.hp && !Helpers.isValidHp(dataBersih.hp)) {
+                    Helpers.toast('⚠️ Format HP tidak valid (10-15 digit angka)', 'error');
+                    return;
+                }
+                if (tabel === 'barang' && dataBersih.qty !== undefined && dataBersih.qty < 0) {
+                    Helpers.toast('⚠️ Qty tidak boleh negatif!', 'error');
+                    return;
+                }
+                if (tabel === 'kas' && dataBersih.nominal !== undefined && isNaN(dataBersih.nominal)) {
+                    Helpers.toast('⚠️ Nominal harus angka!', 'error');
+                    return;
+                }
+
+                this.loading = true;
+                try {
+                    let success = false;
+                    if (this.editId) {
+                        const original = this.data.find(d => d.id === this.editId);
+                        if (original && this.isDataSama(original, dataBersih)) {
+                            Helpers.toast('⚠️ Data tidak ada perubahan.', 'warning');
+                            this.loading = false;
+                            return;
+                        }
+                        success = await DB.update(tabel, this.editId, dataBersih);
+                        if (success) Helpers.toast('✅ Data diupdate!', 'success');
+                    } else {
+                        success = await DB.add(tabel, dataBersih);
+                        if (success) Helpers.toast('✅ Data ditambahkan!', 'success');
+                    }
+                    if (success) {
+                        this.resetForm();
+                        await this.loadData();
+                        await this.loadAutocomplete();
+                    }
+                } catch (e) {
+                    Helpers.toast('❌ Error: ' + e.message, 'error');
+                    console.error(e);
+                } finally {
+                    this.loading = false;
+                }
+            },
+
+            async hapusData() {
+                if (!this.editId) return;
+                const tabel = this.activeTab.toLowerCase();
+                this.loading = true;
+                try {
+                    const success = await DB.delete(tabel, this.editId);
+                    if (success) {
+                        this.resetForm();
+                        await this.loadData();
+                        await this.loadAutocomplete();
+                        Helpers.toast('🗑️ Data dihapus', 'info');
+                    }
+                } catch (e) {
+                    Helpers.toast('❌ Gagal hapus: ' + e.message, 'error');
+                } finally {
+                    this.loading = false;
+                }
+            },
+
+            // ===== EDIT DATA =====
+            async editData(item) {
+                if (this.activeTab === 'Penjualan') {
+                    this.editPenjualanId = item.id;
+                    this.formPenjualan.tgl = item.tgl || Helpers.today();
+                    this.formPenjualan.nama = item.pelanggan || '';
+                    if (item.detail) {
+                        try { this.listPenjualan = JSON.parse(item.detail); } catch { this.listPenjualan = []; }
+                    } else {
+                        this.listPenjualan = [];
+                    }
+                    document.querySelector('.bg-gray-50').scrollIntoView({ behavior: 'smooth' });
+                    return;
+                }
+
+                if (this.activeTab === 'Produksi') {
+                    this.editProduksiId = item.id;
+                    this.formProduksi = {
+                        tgl: item.tgl || Helpers.today(),
+                        qtyKedelai: item.qtyKedelai || 0,
+                        qtyTempe: item.qtyTempe || 0
+                    };
+                    document.querySelector('.bg-gray-50').scrollIntoView({ behavior: 'smooth' });
+                    return;
+                }
+
+                const { id, ...rest } = item;
+                this.formData = { ...rest };
+                this.editId = id;
+                document.querySelector('.bg-gray-50').scrollIntoView({ behavior: 'smooth' });
+            },
+
+            // ========== FUNGSI PENJUALAN ==========
+            tambahItemPenjualan() {
+                const { barangInput, qty, harga } = this.formPenjualan;
+                if (!barangInput) { Helpers.toast('Pilih barang!', 'warning'); return; }
+                if (!qty || qty === 0) { Helpers.toast('Qty harus diisi!', 'warning'); return; }
+                if (!harga || harga === 0) { Helpers.toast('Harga harus diisi!', 'warning'); return; }
+                const barang = this.semuaBarang.find(b => b.nama === barangInput);
+                if (!barang) {
+                    Helpers.toast('Barang "' + barangInput + '" tidak ditemukan!', 'error');
+                    return;
+                }
+                this.listPenjualan.push({
+                    barang: barangInput,
+                    qty: qty,
+                    harga: harga
+                });
+                this.formPenjualan.barangInput = 'tempe';
+                this.formPenjualan.qty = 1;
+                this.updateHargaDariBarang();
+            },
+
+            hapusItemPenjualan(idx) {
+                this.listPenjualan.splice(idx, 1);
+            },
+
+            get totalPenjualan() {
+                return this.listPenjualan.reduce((sum, item) => sum + (item.qty * item.harga), 0);
+            },
+
+            async simpanPenjualan() {
+                if (!this.formPenjualan.nama) { Helpers.toast('Nama pelanggan wajib diisi!', 'warning'); return; }
+                if (this.listPenjualan.length === 0) { Helpers.toast('Tambah minimal 1 barang!', 'warning'); return; }
+
+                for (let item of this.listPenjualan) {
+                    if (item.qty >= 0) {
+                        const barang = this.semuaBarang.find(b => b.nama === item.barang);
+                        if (!barang) {
+                            Helpers.toast('Barang "' + item.barang + '" tidak ditemukan!', 'error');
+                            return;
+                        }
+                        if (barang.qty < item.qty) {
+                            Helpers.toast('Stok "' + item.barang + '" tidak mencukupi! (Stok: ' + barang.qty + ')',
+                                'error');
+                            return;
+                        }
+                    }
+                }
+
+                this.loading = true;
+                try {
+                    let totalKas = 0;
+                    for (let item of this.listPenjualan) {
+                        const barang = this.semuaBarang.find(b => b.nama === item.barang);
+                        if (!barang) continue;
+                        if (item.qty < 0) {
+                            const retur = this.semuaBarang.find(b => b.nama === 'retur');
+                            if (retur) {
+                                await DB.db.barang.update(retur.id, { qty: retur.qty + Math.abs(item.qty) });
+                            }
+                            totalKas += (item.qty * item.harga);
+                        } else {
+                            await DB.db.barang.update(barang.id, { qty: barang.qty - item.qty });
+                            totalKas += (item.qty * item.harga);
+                        }
+                    }
+
+                    await DB.db.kas.add({
+                        tgl: this.formPenjualan.tgl || Helpers.today(),
+                        keterangan: 'Penjualan - ' + this.formPenjualan.nama,
+                        nominal: totalKas
+                    });
+
+                    const dataPenjualan = {
+                        tgl: this.formPenjualan.tgl || Helpers.today(),
+                        pelanggan: this.formPenjualan.nama,
+                        total: this.totalPenjualan,
+                        detail: JSON.stringify(this.listPenjualan)
+                    };
+
+                    if (this.editPenjualanId) {
+                        await DB.update('penjualan', this.editPenjualanId, dataPenjualan);
+                        Helpers.toast('✅ Penjualan diupdate!', 'success');
+                    } else {
+                        await DB.db.penjualan.add(dataPenjualan);
+                        Helpers.toast('✅ Penjualan disimpan!', 'success');
+                    }
+
+                    this.resetFormPenjualan();
+                    await this.loadData();
+                    await this.loadAutocomplete();
+                } catch (e) {
+                    Helpers.toast('❌ Gagal simpan penjualan: ' + e.message, 'error');
+                    console.error(e);
+                } finally {
+                    this.loading = false;
+                }
+            },
+
+            async hapusPenjualan() {
+                if (!this.editPenjualanId) return;
+                this.loading = true;
+                try {
+                    const success = await DB.delete('penjualan', this.editPenjualanId);
+                    if (success) {
+                        this.resetFormPenjualan();
+                        await this.loadData();
+                        Helpers.toast('🗑️ Penjualan dihapus', 'info');
+                    }
+                } catch (e) {
+                    Helpers.toast('❌ Gagal hapus: ' + e.message, 'error');
+                } finally {
+                    this.loading = false;
+                }
+            },
+
+            // ===== KIRIM WA NOTA =====
+            kirimWAPenjualan() {
+                if (this.listPenjualan.length === 0) {
+                    Helpers.toast('Tidak ada item untuk dikirim!', 'warning');
+                    return;
+                }
+                if (!this.formPenjualan.nama) {
+                    Helpers.toast('Nama pelanggan belum diisi!', 'warning');
+                    return;
+                }
+
+                const nomor = '6285963172893';
+                let pesan = `📋 *NOTA PENJUALAN*%0A`;
+                pesan += `Tanggal: ${Helpers.formatTanggal(this.formPenjualan.tgl || Helpers.today())}%0A`;
+                pesan += `Pelanggan: ${this.formPenjualan.nama}%0A%0A`;
+                pesan += `*Item:*%0A`;
+                this.listPenjualan.forEach(item => {
+                    const sub = item.qty * item.harga;
+                    pesan += `- ${item.barang} x ${item.qty} = ${Helpers.formatAngka(sub)}%0A`;
+                });
+                pesan += `%0A*Total: ${Helpers.formatAngka(this.totalPenjualan)}*`;
+
+                window.open(`https://wa.me/${nomor}?text=${pesan}`, '_blank');
+            },
+
+            // ========== FUNGSI PRODUKSI ==========
+            async simpanProduksi() {
+                const data = {
+                    tgl: this.formProduksi.tgl || Helpers.today(),
+                    qtyKedelai: this.formProduksi.qtyKedelai || 0,
+                    qtyTempe: this.formProduksi.qtyTempe || 0
+                };
+
+                if (data.qtyKedelai <= 0 || data.qtyTempe <= 0) {
+                    Helpers.toast('Qty harus lebih dari 0!', 'warning');
+                    return;
+                }
+
+                const kedelai = this.semuaBarang.find(b => b.nama === 'kedelai');
+                if (!kedelai) { Helpers.toast('Barang kedelai tidak ditemukan!', 'error'); return; }
+                if (kedelai.qty < data.qtyKedelai) {
+                    Helpers.toast('Stok kedelai tidak mencukupi! (Stok: ' + kedelai.qty + ')', 'error');
+                    return;
+                }
+
+                this.loading = true;
+                try {
+                    await DB.db.barang.update(kedelai.id, { qty: kedelai.qty - data.qtyKedelai });
+                    const tempe = this.semuaBarang.find(b => b.nama === 'tempe');
+                    if (tempe) {
+                        await DB.db.barang.update(tempe.id, { qty: tempe.qty + data.qtyTempe });
+                    }
+
+                    if (this.editProduksiId) {
+                        await DB.update('produksi', this.editProduksiId, data);
+                        Helpers.toast('✅ Produksi diupdate!', 'success');
+                    } else {
+                        await DB.db.produksi.add(data);
+                        Helpers.toast('✅ Produksi disimpan!', 'success');
+                    }
+
+                    this.resetFormProduksi();
+                    await this.loadData();
+                    await this.loadAutocomplete();
+                } catch (e) {
+                    Helpers.toast('❌ Gagal simpan produksi: ' + e.message, 'error');
+                    console.error(e);
+                } finally {
+                    this.loading = false;
+                }
+            },
+
+            async hapusProduksi() {
+                if (!this.editProduksiId) return;
+                this.loading = true;
+                try {
+                    const success = await DB.delete('produksi', this.editProduksiId);
+                    if (success) {
+                        this.resetFormProduksi();
+                        await this.loadData();
+                        Helpers.toast('🗑️ Produksi dihapus', 'info');
+                    }
+                } catch (e) {
+                    Helpers.toast('❌ Gagal hapus: ' + e.message, 'error');
+                } finally {
+                    this.loading = false;
+                }
+            },
+
+            // ========== BACKUP, RESTORE, CSV ==========
+            async backupData() {
+                try {
+                    const blob = await DB.db.export();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `backup_${Helpers.today()}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    Helpers.toast('✅ Backup berhasil', 'success');
+                } catch (e) {
+                    Helpers.toast('❌ Gagal backup: ' + e.message, 'error');
+                }
+            },
+
+            async restoreData(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    try {
+                        if (confirm('⚠️ Restore akan menimpa semua data! Lanjutkan?')) {
+                            await DB.db.import(new Blob([e.target.result]));
+                            await this.loadData();
+                            await this.loadAutocomplete();
+                            Helpers.toast('✅ Restore berhasil!', 'success');
+                        }
+                    } catch (err) {
+                        Helpers.toast('❌ Gagal restore: ' + err.message, 'error');
+                        console.error(err);
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+                document.getElementById('fileInput').value = '';
+            },
+
+            exportCSV() {
+                if (this.dataFiltered.length === 0) {
+                    Helpers.toast('Tidak ada data!', 'warning');
+                    return;
+                }
+                const headers = this.getColumns();
+                let csv = headers.join(',') + '\n';
+                this.dataFiltered.forEach(item => {
+                    const row = headers.map(col => {
+                        let val = item[col] ?? '';
+                        if (col === 'tgl') val = Helpers.formatTanggal(val);
+                        if (['harga', 'total', 'nominal'].includes(col)) val = Helpers.formatAngka(val);
+                        return val;
+                    }).join(',');
+                    csv += row + '\n';
+                });
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${this.activeTab}_${Helpers.today()}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+                Helpers.toast('✅ CSV diekspor', 'success');
+            }
+        };
+    }
+</script>
+</body>
+</html>
