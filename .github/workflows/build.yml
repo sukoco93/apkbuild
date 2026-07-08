@@ -8,6 +8,12 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    
+    # TAMBAHKAN 3 BARIS INI:
+    permissions:
+      contents: write
+      actions: write
+        
     steps:
       # 1. Gunakan versi v4 untuk checkout
       - name: Checkout code
