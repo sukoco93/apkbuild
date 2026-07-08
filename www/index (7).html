@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Tempe Legend</title>
+    <!-- Google Fonts Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
+    <!-- Font Awesome 6 Free -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Day.js, Lodash, Dexie, Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.7.16/dist/vue.min.js"></script>
+    <script src="https://unpkg.com/dexie@4.0.8/dist/dexie.js"></script>
+    <link rel="manifest" href="./manifest.json">
+    <style>
+        /* ===== RESET ===== */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body, #app {
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f0f4f8;
+            color: #1a2634;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        [v-cloak] { display: none !important; }
+
+        /* ===== SCROLLBAR ===== */
+        .scroll-aman::-webkit-scrollbar { display: none; }
+        .scroll-aman { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* ===== ANIMATIONS ===== */
+        @keyframes fadeSlideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulseGlow {
+            0% { box-shadow: 0 0 0 0 rgba(0, 150, 136, 0.4); }
+            70% { box-shadow: 0 0 0 12px rgba(0, 150, 136, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 150, 136, 0); }
+        }
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-6px); }
+            100% { transform: translateY(0px); }
+        }
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        .animate-in { animation: fadeSlideUp 0.35s ease forwards; }
+
+        /* ===== GLOBAL ===== */
+        .glass {
+            background: rgba(255,255,255,0.72);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+        .glass-dark {
+            background: rgba(26, 38, 52, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+
+        /* ===== APP BAR ===== */
+        .app-bar {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 70px;
+            padding: 0 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 50;
+            background: rgba(255,255,255,0.6);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid rgba(255,255,255,0.5);
+        }
+        .app-bar .search-wrap {
+            flex: 1;
+            position: relative;
+        }
+        .app-bar .search-wrap i {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #8895a7;
+            font-size: 16px;
+            pointer-events: none;
+        }
+        .app-bar .search-wrap input {
+            width: 100%;
+            height: 44px;
+            padding: 0 16px 0 44px;
+            border: none;
+            border-radius: 40px;
+            background: rgba(240, 244, 248, 0.8);
+            font-size: 15px;
+            font-weight: 400;
+            color: #1a2634;
+            outline: none;
+            transition: all 0.2s;
+            font-family: 'Inter', sans-serif;
+        }
+        .app-bar .search-wrap input:focus {
+            background: #ffffff;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+        }
+        .app-bar .search-wrap input::placeholder { color: #a0aec0; }
+        .app-bar .action-btn {
+            width: 44px;
+            height: 44px;
+            border: none;
+            border-radius: 40px;
+            background: rgba(240, 244, 248, 0.6);
+            color: #2d3a4a;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .app-bar .action-btn:active { transform: scale(0.92); background: rgba(0,150,136,0.1); }
+
+        /* ===== MAIN CONTENT ===== */
+        .main-scroll {
+            padding-top: 82px;
+            padding-bottom: 82px;
+            height: 100vh;
+            height: 100dvh;
+            overflow-y: auto;
+            padding-left: 16px;
+            padding-right: 16px;
+        }
+
+        /* ===== SUMMARY CARD (Kas) ===== */
+        .summary-card {
+            background: linear-gradient(145deg, #00796b, #004d40);
+            border-radius: 24px;
+            padding: 20px 16px;
+            margin-bottom: 20px;
+            color: white;
+            box-shadow: 0 12px 30px rgba(0,121,107,0.25);
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+            text-align: center;
+        }
+        .summary-card .item {
+            background: rgba(255,255,255,0.08);
+            border-radius: 16px;
+            padding: 10px 4px;
+            backdrop-filter: blur(4px);
+        }
+        .summary-card .item .label {
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 0.3px;
+            opacity: 0.8;
+            text-transform: uppercase;
+        }
+        .summary-card .item .value {
+            font-size: 18px;
+            font-weight: 800;
+            margin-top: 4px;
+        }
+        .summary-card .item .value.positive { color: #a7f3d0; }
+        .summary-card .item .value.negative { color: #fca5a5; }
+        .summary-card .item .value.net { color: #fcd34d; }
+
+        /* ===== FILTER CHIPS ===== */
+        .filter-scroll {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            padding: 4px 2px 12px 2px;
+            -webkit-overflow-scrolling: touch;
+        }
+        .filter-scroll .chip {
+            flex-shrink: 0;
+            padding: 8px 20px;
+            border-radius: 40px;
+            font-size: 13px;
+            font-weight: 600;
+            background: rgba(255,255,255,0.6);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,0.4);
+            color: #2d3a4a;
+            cursor: pointer;
+            transition: all 0.25s;
+            white-space: nowrap;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+        }
+        .filter-scroll .chip.active {
+            background: #00796b;
+            color: white;
+            border-color: #00796b;
+            box-shadow: 0 6px 14px rgba(0,121,107,0.25);
+        }
+        .filter-scroll .chip:active { transform: scale(0.94); }
+
+        /* ===== HEADER LIST ===== */
+        .list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 4px 12px 4px;
+        }
+        .list-header .title {
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #5a6b7c;
+        }
+        .list-header .badge {
+            background: rgba(0,121,107,0.08);
+            color: #00796b;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 4px 14px;
+            border-radius: 40px;
+        }
+
+        /* ===== LIST ITEM ===== */
+        .list-item {
+            background: rgba(255,255,255,0.75);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,0.5);
+            border-radius: 20px;
+            padding: 16px 16px 16px 18px;
+            margin-bottom: 12px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.02);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: default;
+            animation: fadeSlideUp 0.3s ease;
+        }
+        .list-item:active { transform: scale(0.99); background: rgba(255,255,255,0.9); }
+        .list-item .info { flex: 1; min-width: 0; }
+        .list-item .info .top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+        .list-item .info .top .date {
+            font-size: 12px;
+            font-weight: 600;
+            color: #6b7f93;
+        }
+        .list-item .info .top .tag {
+            font-size: 10px;
+            font-weight: 700;
+            background: rgba(0,150,136,0.08);
+            color: #00796b;
+            padding: 2px 12px;
+            border-radius: 40px;
+            letter-spacing: 0.3px;
+        }
+        .list-item .info .main-text {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1a2634;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .list-item .info .sub-text {
+            font-size: 13px;
+            font-weight: 500;
+            color: #4a5b6e;
+            margin-top: 2px;
+        }
+        .list-item .info .sub-text .highlight {
+            font-weight: 700;
+            color: #00796b;
+        }
+        .list-item .delete-btn {
+            width: 36px;
+            height: 36px;
+            border: none;
+            background: rgba(239, 68, 68, 0.06);
+            border-radius: 40px;
+            color: #b91c1c;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .list-item .delete-btn:active { background: rgba(239,68,68,0.2); transform: scale(0.9); }
+
+        /* ===== BOTTOM NAV ===== */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            height: 72px;
+            background: rgba(255,255,255,0.75);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255,255,255,0.6);
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            padding: 0 8px;
+            z-index: 100;
+        }
+        .bottom-nav .nav-btn {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            border: none;
+            background: transparent;
+            color: #6b7f93;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 6px 0;
+            transition: all 0.2s;
+            position: relative;
+            font-family: 'Inter', sans-serif;
+        }
+        .bottom-nav .nav-btn i {
+            font-size: 22px;
+            transition: all 0.25s;
+        }
+        .bottom-nav .nav-btn.active {
+            color: #00796b;
+        }
+        .bottom-nav .nav-btn.active i {
+            transform: translateY(-2px) scale(1.05);
+            text-shadow: 0 4px 12px rgba(0,121,107,0.2);
+        }
+        .bottom-nav .nav-btn.add-btn {
+            background: linear-gradient(145deg, #00796b, #004d40);
+            width: 58px;
+            height: 58px;
+            border-radius: 40px;
+            color: white;
+            margin-top: -20px;
+            box-shadow: 0 8px 24px rgba(0,121,107,0.35);
+            transition: all 0.25s;
+            animation: float 3s ease-in-out infinite;
+        }
+        .bottom-nav .nav-btn.add-btn i {
+            font-size: 28px;
+        }
+        .bottom-nav .nav-btn.add-btn:active { transform: scale(0.92); }
+
+        /* ===== TOP SHEET ===== */
+        .overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.3);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            z-index: 200;
+            animation: fadeIn 0.25s;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .top-sheet {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 210;
+            background: rgba(255,255,255,0.92);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border-radius: 0 0 32px 32px;
+            padding: 24px 20px 32px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+            animation: slideDown 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+        }
+        @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .top-sheet .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .top-sheet .header h3 {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1a2634;
+            letter-spacing: -0.3px;
+        }
+        .top-sheet .header .close-btn {
+            width: 40px;
+            height: 40px;
+            border: none;
+            background: rgba(0,0,0,0.04);
+            border-radius: 40px;
+            font-size: 20px;
+            cursor: pointer;
+            color: #4a5b6e;
+            transition: 0.2s;
+        }
+        .top-sheet .header .close-btn:active { transform: scale(0.9); background: rgba(0,0,0,0.08); }
+        .top-sheet .field-group { margin-bottom: 16px; }
+        .top-sheet .field-group label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: #5a6b7c;
+            margin-bottom: 4px;
+            letter-spacing: 0.3px;
+        }
+        .top-sheet .field-group input,
+        .top-sheet .field-group select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid rgba(0,0,0,0.04);
+            border-radius: 16px;
+            background: rgba(240, 244, 248, 0.5);
+            font-size: 15px;
+            font-weight: 500;
+            color: #1a2634;
+            outline: none;
+            transition: 0.2s;
+            font-family: 'Inter', sans-serif;
+        }
+        .top-sheet .field-group input:focus,
+        .top-sheet .field-group select:focus {
+            border-color: #00796b;
+            background: white;
+            box-shadow: 0 0 0 4px rgba(0,121,107,0.08);
+        }
+        .top-sheet .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .top-sheet .btn-primary {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 40px;
+            background: linear-gradient(145deg, #00796b, #004d40);
+            color: white;
+            font-weight: 700;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.25s;
+            box-shadow: 0 8px 20px rgba(0,121,107,0.25);
+            font-family: 'Inter', sans-serif;
+        }
+        .top-sheet .btn-primary:active { transform: scale(0.97); }
+        .top-sheet .btn-primary:disabled { opacity: 0.5; pointer-events: none; }
+        .top-sheet .cart-preview {
+            background: rgba(0,0,0,0.02);
+            border-radius: 16px;
+            padding: 12px;
+            margin-bottom: 16px;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+        .top-sheet .cart-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(0,0,0,0.03);
+        }
+        .top-sheet .cart-item .remove {
+            color: #b91c1c;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        /* ===== SETTINGS CARD - NEW ELEGANT DESIGN ===== */
+        .settings-card {
+            background: rgba(255,255,255,0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255,255,255,0.4);
+            border-radius: 24px;
+            padding: 16px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.02);
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .settings-card .setting-item {
+            background: rgba(255,255,255,0.5);
+            border-radius: 16px;
+            padding: 14px 12px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            cursor: pointer;
+            transition: all 0.25s;
+            border: 1px solid transparent;
+        }
+        .settings-card .setting-item:active { transform: scale(0.96); }
+        .settings-card .setting-item .icon-wrap {
+            width: 44px;
+            height: 44px;
+            border-radius: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+        .settings-card .setting-item .icon-wrap.backup {
+            background: rgba(255,152,0,0.12);
+            color: #e65100;
+        }
+        .settings-card .setting-item .icon-wrap.restore {
+            background: rgba(33,150,243,0.12);
+            color: #0d47a1;
+        }
+        .settings-card .setting-item .text {
+            flex: 1;
+        }
+        .settings-card .setting-item .text .title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #1a2634;
+        }
+        .settings-card .setting-item .text .desc {
+            font-size: 12px;
+            color: #6b7f93;
+            font-weight: 500;
+        }
+        .settings-card .setting-item .arrow {
+            color: #a0aec0;
+            font-size: 14px;
+        }
+        .settings-card .setting-item:hover {
+            background: rgba(255,255,255,0.9);
+            border-color: rgba(0,121,107,0.1);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.02);
+        }
+
+        /* ===== SNACKBAR ===== */
+        .snackbar {
+            position: fixed;
+            bottom: 88px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(26,38,52,0.9);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 60px;
+            font-weight: 600;
+            font-size: 14px;
+            z-index: 999;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: fadeSlideUp 0.3s ease;
+        }
+        .snackbar i { color: #a7f3d0; }
+
+        /* ===== UTILITY ===== */
+        .text-truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .mt-1 { margin-top: 4px; }
+        .mb-1 { margin-bottom: 4px; }
+        .mb-2 { margin-bottom: 8px; }
+        .mb-3 { margin-bottom: 16px; }
+        .flex { display: flex; align-items: center; gap: 8px; }
+        .flex-between { display: flex; justify-content: space-between; align-items: center; }
+        .gap-2 { gap: 8px; }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 420px) {
+            .app-bar { padding: 0 12px; height: 64px; }
+            .main-scroll { padding-top: 76px; padding-bottom: 76px; padding-left: 12px; padding-right: 12px; }
+            .list-item { padding: 14px; }
+            .summary-card .item .value { font-size: 16px; }
+            .bottom-nav { height: 64px; }
+            .bottom-nav .nav-btn.add-btn { width: 50px; height: 50px; }
+            .bottom-nav .nav-btn.add-btn i { font-size: 24px; }
+            .settings-card { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div id="app" v-cloak>
+        <!-- APP BAR -->
+        <header class="app-bar">
+            <div class="search-wrap">
+                <i class="fas fa-search"></i>
+                <input type="text" v-model="store.searchQuery" placeholder="Cari data..." @input="resetLazyLoad">
+            </div>
+            <button class="action-btn" @click="handleExport" :disabled="store.isLoading"><i class="fas fa-download"></i></button>
+            <button class="action-btn" @click="$refs.csvInput.click()" :disabled="store.isLoading"><i class="fas fa-upload"></i></button>
+            <input type="file" ref="csvInput" accept=".csv" @change="handleImport" style="display:none">
+            <button class="action-btn" @click="store.showSettings = !store.showSettings"><i class="fas fa-sliders-h"></i></button>
+        </header>
+
+        <!-- MAIN SCROLL -->
+        <div class="main-scroll scroll-aman" @scroll="handleListScroll">
+            <!-- SETTINGS - ELEGANT CARD -->
+            <div v-if="store.showSettings" class="settings-card animate-in">
+                <div class="setting-item" @click="backupJSON">
+                    <div class="icon-wrap backup"><i class="fas fa-file-export"></i></div>
+                    <div class="text">
+                        <div class="title">Backup</div>
+                        <div class="desc">Simpan semua data</div>
+                    </div>
+                    <div class="arrow"><i class="fas fa-chevron-right"></i></div>
+                </div>
+                <div class="setting-item" @click="$refs.jsonInput.click()">
+                    <div class="icon-wrap restore"><i class="fas fa-file-import"></i></div>
+                    <div class="text">
+                        <div class="title">Restore</div>
+                        <div class="desc">Pulihkan dari file</div>
+                    </div>
+                    <div class="arrow"><i class="fas fa-chevron-right"></i></div>
+                </div>
+                <input type="file" ref="jsonInput" accept=".json" @change="restoreJSON" style="display:none">
+            </div>
+
+            <!-- KAS SUMMARY -->
+            <div v-if="store.currentMenu === 'kas'" class="summary-card">
+                <div class="item"><div class="label">Masuk</div><div class="value positive">Rp{{ kasSummary.masuk.toLocaleString() }}</div></div>
+                <div class="item"><div class="label">Keluar</div><div class="value negative">Rp{{ kasSummary.keluar.toLocaleString() }}</div></div>
+                <div class="item"><div class="label">Sisa</div><div class="value net">Rp{{ kasSummary.netto.toLocaleString() }}</div></div>
+            </div>
+
+            <!-- FILTER -->
+            <div v-if="store.currentMenu !== 'pelanggan'" class="filter-scroll">
+                <button v-for="opt in store.filterOptions" :key="opt.value" class="chip" :class="{ active: store.activeFilter === opt.value }" @click="setFilter(opt.value)">{{ opt.label }}</button>
+            </div>
+
+            <!-- LIST HEADER -->
+            <div class="list-header">
+                <span class="title">Arsip {{ store.currentMenu }}</span>
+                <span class="badge">{{ pipelineResult.data.length }} dari {{ pipelineResult.totalItems }}</span>
+            </div>
+
+            <!-- LIST -->
+            <div v-if="pipelineResult.data.length === 0" style="text-align:center;padding:40px 0;color:#8895a7;font-weight:500;">Tidak ada data</div>
+            <div v-for="item in pipelineResult.data" :key="item.id" class="list-item" @dblclick="sendWhatsApp(item)">
+                <div class="info">
+                    <!-- PELANGGAN -->
+                    <template v-if="store.currentMenu === 'pelanggan'">
+                        <div class="main-text">{{ item.nama }}</div>
+                        <div class="sub-text"><i class="fas fa-phone-alt" style="margin-right:6px;"></i>{{ item.hp }}</div>
+                    </template>
+                    <!-- PENJUALAN -->
+                    <template v-if="store.currentMenu === 'penjualan'">
+                        <div class="top"><span class="date">{{ item.tgl }}</span><span class="tag">👤 {{ getPelangganName(item.pelangganId) }}</span></div>
+                        <div class="main-text text-truncate">{{ item.barang }}</div>
+                        <div class="sub-text">Total <span class="highlight">Rp{{ item.total.toLocaleString() }}</span></div>
+                    </template>
+                    <!-- KAS -->
+                    <template v-if="store.currentMenu === 'kas'">
+                        <div class="top"><span class="date">{{ item.tgl }}</span><span class="tag" :style="item.jenis==='masuk'?'background:#e0f2f1;color:#00695c;':'background:#ffebee;color:#b71c1c;'">{{ item.jenis==='masuk' ? 'Masuk' : 'Keluar' }}</span></div>
+                        <div class="main-text">{{ formatKeteranganKas(item) }}</div>
+                        <div class="sub-text">Rp<span class="highlight">{{ item.nominal.toLocaleString() }}</span></div>
+                    </template>
+                    <!-- PRODUKSI -->
+                    <template v-if="store.currentMenu === 'produksi'">
+                        <div class="top"><span class="date">{{ item.tgl }}</span></div>
+                        <div class="main-text"><i class="fas fa-seedling" style="color:#2e7d32;margin-right:8px;"></i>{{ item.bahan }} <span style="font-weight:400;font-size:14px;">({{ item.qty_bahan }})</span></div>
+                        <div class="sub-text"><i class="fas fa-box" style="color:#00796b;margin-right:8px;"></i>{{ item.produk }} <span style="font-weight:400;">({{ item.qty_produk }} Pcs)</span></div>
+                    </template>
+                </div>
+                <button class="delete-btn" @click.stop="deleteData(item.id)" :disabled="store.isLoading"><i class="fas fa-trash-alt"></i></button>
+            </div>
+
+            <!-- LAZY LOADING INDICATOR -->
+            <div v-if="pipelineResult.data.length < pipelineResult.totalItems" style="text-align:center;padding:12px 0;color:#8895a7;font-weight:500;font-size:14px;">
+                <i class="fas fa-spinner fa-pulse"></i> Menggulung data...
+            </div>
+        </div>
+
+        <!-- TOP SHEET ADD -->
+        <transition name="fade">
+            <div v-if="store.showAddDialog" class="overlay" @click="store.showAddDialog = false"></div>
+        </transition>
+        <transition name="slide">
+            <div v-if="store.showAddDialog" class="top-sheet">
+                <div class="header">
+                    <h3><i class="fas fa-plus-circle" style="color:#00796b;margin-right:8px;"></i>Tambah {{ store.currentMenu }}</h3>
+                    <button class="close-btn" @click="store.showAddDialog = false"><i class="fas fa-times"></i></button>
+                </div>
+                <form @submit.prevent="submitForm">
+                    <!-- PELANGGAN -->
+                    <div v-if="store.currentMenu === 'pelanggan'">
+                        <div class="field-group"><label>Nama Pelanggan</label><input v-model="store.forms.pelanggan.nama" placeholder="Nama lengkap" required></div>
+                        <div class="field-group"><label>No. WhatsApp</label><input v-model="store.forms.pelanggan.hp" placeholder="0812xxxx" type="tel" required></div>
+                    </div>
+
+                    <!-- PENJUALAN -->
+                    <div v-if="store.currentMenu === 'penjualan'">
+                        <div class="row-2">
+                            <div class="field-group"><label>Tanggal</label><input v-model="store.forms.penjualan.tgl" type="date" required></div>
+                            <div class="field-group"><label>Pelanggan</label>
+                                <select v-model="store.forms.penjualan.pelangganId" required>
+                                    <option v-for="p in store.lists.pelanggan" :key="p.id" :value="p.id">{{ p.nama }}</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row-2">
+                            <div class="field-group"><label>Barang</label><input v-model="store.forms.penjualan.barang" placeholder="Nama barang" required></div>
+                            <div class="field-group"><label>Qty</label><input v-model.number="store.forms.penjualan.qty" type="number" min="1" required></div>
+                        </div>
+                        <div class="field-group"><label>Harga Satuan</label><input v-model.number="store.forms.penjualan.harga" type="number" min="0" required></div>
+                        <button type="button" class="btn-primary" style="background:linear-gradient(145deg,#00897b,#00695c);margin-bottom:12px;" :disabled="store.isAjaxLoading" @click="dispatchAddToCart">
+                            <i class="fas fa-cart-plus"></i> Masukkan Keranjang
+                        </button>
+                        <div class="cart-preview scroll-aman" v-if="store.cart.length">
+                            <div v-for="(c, idx) in store.cart" :key="idx" class="cart-item">
+                                <span>{{ c.barang }} x{{ c.qty }} <strong>Rp{{ (c.qty*c.harga).toLocaleString() }}</strong></span>
+                                <span class="remove" @click="store.cart.splice(idx,1)"><i class="fas fa-minus-circle"></i></span>
+                            </div>
+                            <div style="text-align:right;font-weight:700;color:#00796b;margin-top:6px;">Subtotal: Rp{{ cartTotal.toLocaleString() }}</div>
+                        </div>
+                    </div>
+
+                    <!-- KAS -->
+                    <div v-if="store.currentMenu === 'kas'">
+                        <div class="row-2">
+                            <div class="field-group"><label>Tanggal</label><input v-model="store.forms.kas.tgl" type="date" required></div>
+                            <div class="field-group"><label>Jenis</label>
+                                <select v-model="store.forms.kas.jenis" required>
+                                    <option value="masuk">Masuk (+)</option>
+                                    <option value="keluar">Keluar (-)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="field-group"><label>Keterangan</label><input v-model="store.forms.kas.keterangan" placeholder="Deskripsi" required></div>
+                        <div class="field-group"><label>Nominal</label><input v-model.number="store.forms.kas.nominal" type="number" min="0" placeholder="Rp" required></div>
+                    </div>
+
+                    <!-- PRODUKSI -->
+                    <div v-if="store.currentMenu === 'produksi'">
+                        <div class="field-group"><label>Tanggal</label><input v-model="store.forms.produksi.tgl" type="date" required></div>
+                        <div class="row-2">
+                            <div class="field-group"><label>Bahan Baku</label><input v-model="store.forms.produksi.bahan" placeholder="Kedelai" required></div>
+                            <div class="field-group"><label>Qty Bahan</label><input v-model.number="store.forms.produksi.qty_bahan" type="number" min="1" required></div>
+                        </div>
+                        <div class="row-2">
+                            <div class="field-group"><label>Produk Jadi</label><input v-model="store.forms.produksi.produk" placeholder="Tempe" required></div>
+                            <div class="field-group"><label>Qty Produk</label><input v-model.number="store.forms.produksi.qty_produk" type="number" min="1" required></div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-primary" :disabled="store.isLoading || (store.currentMenu==='penjualan' && store.cart.length===0)">
+                        <i class="fas fa-save"></i> Simpan
+                    </button>
+                </form>
+            </div>
+        </transition>
+
+        <!-- BOTTOM NAV -->
+        <nav class="bottom-nav">
+            <button class="nav-btn" :class="{ active: store.currentMenu === 'penjualan' }" @click="changeTab('penjualan')">
+                <i class="fas fa-shopping-cart"></i>
+                <span>Jual</span>
+            </button>
+            <button class="nav-btn" :class="{ active: store.currentMenu === 'kas' }" @click="changeTab('kas')">
+                <i class="fas fa-wallet"></i>
+                <span>Kas</span>
+            </button>
+            <button class="nav-btn add-btn" @click="store.showAddDialog = true">
+                <i class="fas fa-plus"></i>
+            </button>
+            <button class="nav-btn" :class="{ active: store.currentMenu === 'produksi' }" @click="changeTab('produksi')">
+                <i class="fas fa-seedling"></i>
+                <span>Produksi</span>
+            </button>
+            <button class="nav-btn" :class="{ active: store.currentMenu === 'pelanggan' }" @click="changeTab('pelanggan')">
+                <i class="fas fa-users"></i>
+                <span>Pelanggan</span>
+            </button>
+        </nav>
+
+        <!-- SNACKBAR -->
+        <transition name="fade">
+            <div v-if="store.toast.show" class="snackbar">
+                <i class="fas fa-check-circle"></i> {{ store.toast.message }}
+            </div>
+        </transition>
+    </div>
+
+    <script>
+        // ============================================================
+        // 1. KONSTANTA
+        // ============================================================
+        const DEFAULT_FORMS = {
+            pelanggan: { nama: '', hp: '' },
+            penjualan: { tgl: dayjs().format('YYYY-MM-DD'), pelangganId: '', barang: 'Tempe', qty: 1, harga: 2500 },
+            kas: { tgl: dayjs().format('YYYY-MM-DD'), jenis: 'masuk', keterangan: '', nominal: '' },
+            produksi: { tgl: dayjs().format('YYYY-MM-DD'), bahan: 'Kedelai', qty_bahan: 1, produk: 'Tempe', qty_produk: 1 }
+        };
+        const FILTER_OPTIONS = [
+            { label: 'Semua', value: 'all' },
+            { label: 'Hari Ini', value: 'today' },
+            { label: 'Kemarin', value: 'yesterday' },
+            { label: 'Minggu Ini', value: 'thisWeek' },
+            { label: 'Minggu Lalu', value: 'lastWeek' },
+            { label: 'Rentang 📅', value: 'range' }
+        ];
+        const WHATSAPP_TARGET = "6285963172893";
+
+        // ============================================================
+        // 2. UTILITY
+        // ============================================================
+        function today() { return dayjs().format('YYYY-MM-DD'); }
+        function getDateOffset(d) { return dayjs().add(d, 'day').format('YYYY-MM-DD'); }
+        function validateForm(data, fields) {
+            for (let f of fields) {
+                const v = data[f];
+                if (typeof v === 'string' && v.trim() === '') return { valid: false, field: f };
+                if (typeof v === 'number' && v <= 0) return { valid: false, field: f };
+                if (v === undefined || v === null || v === '') return { valid: false, field: f };
+            }
+            return { valid: true };
+        }
+        function downloadFile(content, name, mime = 'text/csv') {
+            const blob = new Blob([content], { type: mime });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = name;
+            a.click();
+            URL.revokeObjectURL(a.href);
+        }
+        function arrayToCSV(data) {
+            if (!data || !data.length) return '';
+            const headers = Object.keys(data[0]);
+            const rows = data.map(obj => headers.map(k => `"${obj[k]}"`).join(','));
+            return [headers.join(','), ...rows].join('\n');
+        }
+
+        // ============================================================
+        // 3. DEXIE DB
+        // ============================================================
+        const db = new Dexie("TokoAndroidDB_TopSheet_FinalFix");
+        db.version(1).stores({
+            pelanggan: '++id, nama, hp',
+            penjualan: '++id, tgl, pelangganId, barang, total',
+            kas: '++id, tgl, jenis, keterangan, nominal, isAutomated, pelangganId',
+            produksi: '++id, tgl, bahan, produk'
+        });
+
+        // ============================================================
+        // 4. VUE APP
+        // ============================================================
+        new Vue({
+            el: '#app',
+            data: {
+                store: {
+                    currentMenu: 'penjualan',
+                    searchQuery: '',
+                    showSettings: false,
+                    isLoading: false,
+                    isAjaxLoading: false,
+                    activeFilter: 'all',
+                    showRangeDialog: false,
+                    showAddDialog: false,
+                    customRange: { start: today(), end: today() },
+                    filterOptions: FILTER_OPTIONS,
+                    lists: { pelanggan: [], penjualan: [], kas: [], produksi: [] },
+                    cart: [],
+                    lazyLimit: 10,
+                    toast: { show: false, message: '' },
+                    forms: _.cloneDeep(DEFAULT_FORMS)
+                }
+            },
+            computed: {
+                filteredList() {
+                    const q = this.store.searchQuery.toLowerCase();
+                    const m = this.store.currentMenu;
+                    const data = this.store.lists[m] || [];
+                    let filtered = _.filter(data, item => {
+                        if (m === 'pelanggan') return item.nama.toLowerCase().includes(q) || item.hp.includes(q);
+                        if (m === 'penjualan') return item.barang.toLowerCase().includes(q) || this.getPelangganName(item.pelangganId).toLowerCase().includes(q);
+                        if (m === 'kas') return this.formatKeteranganKas(item).toLowerCase().includes(q);
+                        if (m === 'produksi') return item.bahan.toLowerCase().includes(q) || item.produk.toLowerCase().includes(q);
+                        return true;
+                    });
+                    if (m !== 'pelanggan') {
+                        const f = this.store.activeFilter;
+                        const hari = today(), kemarin = getDateOffset(-1);
+                        const mingguIni = dayjs().startOf('week').format('YYYY-MM-DD');
+                        const mingguLaluStart = dayjs().subtract(1,'week').startOf('week').format('YYYY-MM-DD');
+                        const mingguLaluEnd = dayjs().subtract(1,'week').endOf('week').format('YYYY-MM-DD');
+                        filtered = _.filter(filtered, item => {
+                            if (f === 'all') return true;
+                            if (f === 'today') return item.tgl === hari;
+                            if (f === 'yesterday') return item.tgl === kemarin;
+                            if (f === 'thisWeek') return item.tgl >= mingguIni && item.tgl <= hari;
+                            if (f === 'lastWeek') return item.tgl >= mingguLaluStart && item.tgl <= mingguLaluEnd;
+                            if (f === 'range') return item.tgl >= this.store.customRange.start && item.tgl <= this.store.customRange.end;
+                            return true;
+                        }, this);
+                    }
+                    return _.orderBy(filtered, ['tgl','id'], ['desc','desc']);
+                },
+                pipelineResult() {
+                    return {
+                        data: this.filteredList.slice(0, this.store.lazyLimit),
+                        totalItems: this.filteredList.length
+                    };
+                },
+                kasSummary() {
+                    if (this.store.currentMenu !== 'kas') return { masuk: 0, keluar: 0, netto: 0 };
+                    const masuk = _.sumBy(this.filteredList, i => i.jenis === 'masuk' ? i.nominal : 0);
+                    const keluar = _.sumBy(this.filteredList, i => i.jenis === 'keluar' ? i.nominal : 0);
+                    return { masuk, keluar, netto: masuk - keluar };
+                },
+                cartTotal() {
+                    return _.sumBy(this.store.cart, i => i.qty * i.harga);
+                }
+            },
+            watch: {
+                'store.lists': { deep: true, handler() {} }
+            },
+            methods: {
+                getPelangganName(id) {
+                    const found = _.find(this.store.lists.pelanggan, { id });
+                    return found ? found.nama : 'Umum';
+                },
+                formatKeteranganKas(item) {
+                    if (item.isAutomated) return `Penjualan - ${this.getPelangganName(item.pelangganId)}`;
+                    return item.keterangan || '-';
+                },
+                resetLazyLoad() { this.store.lazyLimit = 10; },
+                changeTab(tab) { this.store.currentMenu = tab; this.resetLazyLoad(); },
+                setFilter(val) { this.store.activeFilter = val; if (val === 'range') this.store.showRangeDialog = true; this.resetLazyLoad(); },
+                handleListScroll(e) {
+                    const el = e.target;
+                    if (el.scrollHeight - el.scrollTop - el.clientHeight < 20 && this.store.lazyLimit < this.filteredList.length) {
+                        this.store.lazyLimit += 10;
+                    }
+                },
+                showToast(msg) {
+                    this.store.toast.message = msg;
+                    this.store.toast.show = true;
+                    setTimeout(() => { this.store.toast.show = false; }, 1800);
+                },
+                async dispatchAddToCart() {
+                    const f = this.store.forms.penjualan;
+                    if (!f.barang.trim() || !f.harga) { this.showToast('Isi barang & harga'); return; }
+                    this.store.isAjaxLoading = true;
+                    await new Promise(r => setTimeout(r, 150));
+                    const target = _.find(this.store.cart, i => i.barang.toLowerCase() === f.barang.trim().toLowerCase());
+                    if (target) target.qty += f.qty;
+                    else this.store.cart.push({ barang: f.barang.trim(), qty: f.qty, harga: f.harga });
+                    this.showToast(`${f.barang.trim()} ditambahkan`);
+                    f.barang = f.barang.trim() === 'Tempe' ? 'Balen' : 'Tempe';
+                    f.harga = f.barang === 'Tempe' ? 2500 : 2000;
+                    f.qty = 1;
+                    this.store.isAjaxLoading = false;
+                },
+                async submitForm() {
+                    if (this.store.isLoading) return;
+                    const m = this.store.currentMenu;
+                    const data = { ...this.store.forms[m] };
+                    let required = [];
+                    if (m === 'pelanggan') required = ['nama','hp'];
+                    else if (m === 'kas') required = ['tgl','jenis','keterangan','nominal'];
+                    else if (m === 'produksi') required = ['tgl','bahan','qty_bahan','produk','qty_produk'];
+                    else if (m === 'penjualan') {
+                        if (!this.store.cart.length) { this.showToast('Keranjang kosong'); return; }
+                        required = ['tgl','pelangganId'];
+                    }
+                    const val = validateForm(data, required);
+                    if (!val.valid) { this.showToast(`"${val.field}" wajib diisi`); return; }
+
+                    this.store.isLoading = true;
+                    try {
+                        const tables = [db[m]];
+                        if (m === 'penjualan') tables.push(db.kas);
+                        await db.transaction('rw', tables, async () => {
+                            if (m === 'penjualan') {
+                                const rincian = this.store.cart.map(i => `${i.barang} (${i.qty}xRp${i.harga.toLocaleString()})`).join(', ');
+                                const total = this.cartTotal;
+                                await db.penjualan.add({ tgl: data.tgl, pelangganId: data.pelangganId, barang: rincian, total });
+                                await db.kas.add({
+                                    tgl: data.tgl, jenis: 'masuk',
+                                    keterangan: `Penjualan: ${rincian}`,
+                                    nominal: total, isAutomated: true, pelangganId: data.pelangganId
+                                });
+                                this.store.cart = [];
+                                this.store.forms.penjualan = _.cloneDeep(DEFAULT_FORMS.penjualan);
+                            } else {
+                                await db[m].add(data);
+                            }
+                        });
+                        this.showToast('Tersimpan!');
+                        this.store.showAddDialog = false;
+                        this.store.forms[m] = _.cloneDeep(DEFAULT_FORMS[m]);
+                        this.resetLazyLoad();
+                        await this.loadData();
+                    } catch (e) {
+                        console.error(e);
+                        this.showToast('Gagal: ' + e.message);
+                    } finally { this.store.isLoading = false; }
+                },
+                async deleteData(id) {
+                    if (this.store.isLoading || !confirm('Hapus data ini?')) return;
+                    this.store.isLoading = true;
+                    const m = this.store.currentMenu;
+                    try {
+                        const tables = [db[m]];
+                        if (m === 'penjualan') tables.push(db.kas);
+                        await db.transaction('rw', tables, async () => {
+                            if (m === 'penjualan') {
+                                const p = await db.penjualan.get(id);
+                                if (p) {
+                                    const k = await db.kas.where({ tgl: p.tgl, nominal: p.total, isAutomated: true }).first();
+                                    if (k) await db.kas.delete(k.id);
+                                }
+                            }
+                            await db[m].delete(id);
+                        });
+                        this.showToast('Terhapus');
+                        await this.loadData();
+                    } catch (e) { console.error(e); this.showToast('Gagal hapus'); }
+                    finally { this.store.isLoading = false; }
+                },
+                sendWhatsApp(item) {
+                    if (this.store.currentMenu !== 'penjualan' || !item.barang) return;
+                    const nama = this.getPelangganName(item.pelangganId);
+                    const lines = item.barang.split(', ').map(i => `  ${i}`).join('\n');
+                    const msg = "```\n============================\n          INVOICE           \n============================\nTgl      : "+item.tgl+"\nPelanggan: "+nama+"\n----------------------------\nDaftar Barang:\n"+lines+"\n----------------------------\nTOTAL    : Rp "+item.total.toLocaleString()+"\n============================\nTerimakasih\nIda 0856-0627-1720\n```";
+                    window.open(`https://api.whatsapp.com/send?phone=${WHATSAPP_TARGET}&text=${encodeURIComponent(msg)}`, '_blank');
+                },
+                handleExport() {
+                    const data = this.store.lists[this.store.currentMenu];
+                    if (!data || !data.length) { this.showToast('Tidak ada data'); return; }
+                    const csv = arrayToCSV(data);
+                    downloadFile(csv, `${this.store.currentMenu}.csv`);
+                    this.showToast('Export berhasil');
+                },
+                handleImport(e) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = async (ev) => {
+                        try {
+                            this.store.isLoading = true;
+                            const lines = ev.target.result.split('\n').filter(l => l.trim());
+                            if (lines.length < 2) { this.showToast('CSV kosong'); return; }
+                            const headers = lines[0].split(',').map(h => h.trim());
+                            const bulk = [];
+                            for (let i=1; i<lines.length; i++) {
+                                const vals = lines[i].split(',').map(v => v.replace(/^"|"$/g,'').trim());
+                                const obj = {};
+                                headers.forEach((h, idx) => { if (h !== 'id') obj[h] = isNaN(vals[idx]) ? vals[idx] : Number(vals[idx]); });
+                                bulk.push(obj);
+                            }
+                            await db[this.store.currentMenu].bulkAdd(bulk);
+                            this.showToast('Impor sukses');
+                            this.resetLazyLoad();
+                            await this.loadData();
+                        } catch (err) { alert('Eror CSV: '+err.message); }
+                        finally { this.store.isLoading = false; e.target.value = ''; }
+                    };
+                    reader.readAsText(file);
+                },
+                backupJSON() {
+                    const payload = {
+                        pelanggan: this.store.lists.pelanggan,
+                        penjualan: this.store.lists.penjualan,
+                        kas: this.store.lists.kas,
+                        produksi: this.store.lists.produksi
+                    };
+                    downloadFile(JSON.stringify(payload, null, 2), 'Backup.json', 'application/json');
+                    this.showToast('Backup selesai');
+                    this.store.showSettings = false;
+                },
+                restoreJSON(e) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = async (ev) => {
+                        try {
+                            this.store.isLoading = true;
+                            const data = JSON.parse(ev.target.result);
+                            for (const s in data) {
+                                if (db[s]) {
+                                    await db[s].clear();
+                                    for (const item of data[s]) { delete item.id; await db[s].add(item); }
+                                }
+                            }
+                            this.showToast('Restore sukses');
+                            this.store.showSettings = false;
+                            setTimeout(() => location.reload(), 500);
+                        } catch (err) { alert('JSON rusak: '+err.message); }
+                        finally { this.store.isLoading = false; }
+                    };
+                    reader.readAsText(file);
+                },
+                async loadData() {
+                    try {
+                        this.store.isLoading = true;
+                        this.store.lists.pelanggan = await db.pelanggan.toArray();
+                        this.store.lists.penjualan = await db.penjualan.toArray();
+                        this.store.lists.kas = await db.kas.toArray();
+                        this.store.lists.produksi = await db.produksi.toArray();
+                    } catch (e) { console.error(e); this.showToast('Gagal muat data'); }
+                    finally { this.store.isLoading = false; }
+                }
+            },
+            mounted() { this.loadData(); }
+        });
+
+        // Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('SW terdaftar'))
+                    .catch(err => console.log('SW tidak tersedia'));
+            });
+        }
+    </script>
+</body>
+</html>
