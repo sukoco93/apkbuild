@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Tempe Legend</title>
+    <link href="https://cdn.jsdelivr.net/npm/vuetify@3.5.2/dist/vuetify.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vuetify@3.5.2/dist/vuetify.min.js"></script>
+    <script src="https://unpkg.com/dexie@latest/dist/dexie.js"></script>
+    <link rel="manifest" href="./manifest.json">
+    
+    <style>
+        [v-cloak] { display: none !important; }
+        html, body, #app {
+            overflow: hidden !important;
+            height: 100vh !important;
+            height: 100dvh !important;
+            user-select: none;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+            font-size: 15px !important;
+        }
+        .text-body-1, .text-body-2 { font-size: 15px !important; }
+        .text-title-wa { font-size: 16px !important; font-weight: 600 !important; }
+        .text-caption-wa { font-size: 13px !important; }
+        
+        .scroll-aman::-webkit-scrollbar { display: none; }
+        .scroll-aman { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .v-field {
+            background-color: #f1f3f4 !important;
+            border-radius: 12px !important;
+        }
+
+        .filter-scroll-x {
+            display: flex;
+            overflow-x: auto;
+            overflow-y: hidden;
+            white-space: nowrap;
+            gap: 8px;
+            padding: 8px 4px;
+            width: 100%;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .chip-custom-filter {
+            font-size: 13px !important;
+            font-weight: 600 !important;
+            padding: 8px 16px !important;
+            border-radius: 50px !important;
+            height: auto !important;
+            display: inline-block;
+            text-align: center;
+            vertical-align: middle;
+            flex-shrink: 0 !important;
+            box-sizing: border-box;
+            transition: all 0.2s ease;
+            border: none;
+            outline: none;
+        }
+
+        .bottom-nav-custom {
+            position: fixed !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            height: 64px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-around !important;
+            background-color: #ffffff !important;
+            border-top: 1px solid #e0e0e0 !important;
+            z-index: 998;
+        }
+
+        .nav-item-btn {
+            flex: 1;
+            height: 100% !important;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: none;
+            border: none;
+            color: #757575;
+            transition: color 0.2s ease;
+        }
+        .nav-item-btn.active-nav { color: #00796B !important; }
+
+        .center-add-btn {
+            width: 52px !important;
+            height: 52px !important;
+            background-color: #00796B !important;
+            color: white !important;
+            border-radius: 50% !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 10px rgba(0,121,107,0.3);
+            border: none;
+            outline: none;
+            flex-shrink: 0;
+            margin: 0 8px;
+            transition: transform 0.1s ease;
+        }
+        .center-add-btn:active { transform: scale(0.92); }
+
+        .top-sheet-card {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 999;
+            border-radius: 0 0 24px 24px !important;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.15) !important;
+        }
+        .top-sheet-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.3);
+            z-index: 998;
+        }
+    </style>
+</head>
+<body>
+
+    <v-app id="app" v-cloak class="bg-grey-lighten-5">
+        <v-layout class="h-100 flex-column">
+            
+            <v-snackbar v-model="store.toast.show" timeout="1500" location="top" color="grey-darken-4">
+                {{ store.toast.message }}
+            </v-snackbar>
+
+            <v-app-bar flat class="px-3 bg-grey-lighten-5" position="fixed" height="64">
+                <v-text-field v-model="store.searchQuery" prepend-inner-icon="mdi-magnify" placeholder="Cari data..." variant="solo" flat hide-details density="compact" rounded="xl" class="bg-grey-lighten-5" @update:model-value="resetLazyLoad"></v-text-field>
+                <v-btn icon="mdi-download-outline" density="comfortable" color="grey-darken-2" class="ml-1" :disabled="store.isLoading" @click="handleExport"></v-btn>
+                <v-btn icon="mdi-upload-outline" density="comfortable" color="grey-darken-2" :disabled="store.isLoading" @click="$refs.csvFile.click()"></v-btn>
+                <input type="file" ref="csvFile" accept=".csv" @change="handleImport" class="d-none">
+                <v-btn icon="mdi-cog-outline" density="comfortable" color="grey-darken-2" @click="store.showSettings = !store.showSettings"></v-btn>
+            </v-app-bar>
+
+            <v-main class="d-flex flex-column h-100 overflow-hidden pa-0" style="padding-top: 64px !important; padding-bottom: 64px !important;">
+                
+                <v-dialog v-model="store.showRangeDialog" max-width="320">
+                    <v-card class="rounded-xl pa-4">
+                        <div class="text-title-wa mb-3 text-grey-darken-4">Pilih Rentang Tanggal</div>
+                        <v-text-field v-model="store.customRange.start" type="date" label="Tanggal Mulai" variant="solo" flat density="compact" class="mb-2"></v-text-field>
+                        <v-text-field v-model="store.customRange.end" type="date" label="Tanggal Selesai" variant="solo" flat density="compact" class="mb-3"></v-text-field>
+                        <v-btn block color="teal-darken-1" rounded="xl" class="font-weight-bold" @click="store.showRangeDialog = false">Terapkan</v-btn>
+                    </v-card>
+                </v-dialog>
+
+                <v-expand-transition>
+                    <v-card v-if="store.showSettings" flat class="mx-3 mt-1 pa-2 rounded-xl bg-grey-lighten-4 d-flex justify-space-around flex-shrink-0">
+                        <v-btn size="small" prepend-icon="mdi-file-json" color="orange-darken-2" variant="text" class="font-weight-bold" :disabled="store.isLoading" @click="backupJSON">Backup</v-btn>
+                        <v-btn size="small" prepend-icon="mdi-folder-open-outline" color="blue-darken-2" variant="text" class="font-weight-bold" :disabled="store.isLoading" @click="$refs.jsonFile.click()">Restore</v-btn>
+                        <input type="file" ref="jsonFile" accept=".json" @change="restoreJSON" class="d-none">
+                    </v-card>
+                </v-expand-transition>
+
+                <v-expand-transition>
+                    <div v-if="store.currentMenu === 'kas'" class="px-3 mt-2">
+                        <v-card flat class="bg-teal-lighten-5 rounded-xl pa-3 border-sm border-teal-lighten-4">
+                            <v-row dense class="text-center">
+                                <v-col cols="4">
+                                    <div class="text-caption-wa text-grey-darken-2">Total Masuk</div>
+                                    <div class="font-weight-bold text-teal-darken-3 text-truncate">Rp{{ kasSummary.masuk.toLocaleString() }}</div>
+                                </v-col>
+                                <v-col cols="4" class="border-inline-sm border-teal-lighten-4">
+                                    <div class="text-caption-wa text-grey-darken-2">Total Keluar</div>
+                                    <div class="font-weight-bold text-red-darken-2 text-truncate">Rp{{ kasSummary.keluar.toLocaleString() }}</div>
+                                </v-col>
+                                <v-col cols="4">
+                                    <div class="text-caption-wa text-grey-darken-2">Sisa Kas</div>
+                                    <div class="font-weight-bold text-blue-darken-3 text-truncate">Rp{{ kasSummary.netto.toLocaleString() }}</div>
+                                </v-col>
+                            </v-row>
+                        </v-card>
+                    </div>
+                </v-expand-transition>
+
+                <div v-if="store.currentMenu !== 'pelanggan'" class="px-3 mt-2 flex-shrink-0">
+                    <div class="filter-scroll-x scroll-aman">
+                        <button v-for="opt in store.filterOptions" :key="opt.value" :class="store.activeFilter === opt.value ? 'bg-teal-darken-1 text-white' : 'bg-grey-lighten-3 text-grey-darken-3'" class="chip-custom-filter" @click="setFilter(opt.value)">
+                            {{ opt.label }}
+                        </button>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-space-between align-center px-4 pt-1 pb-1 flex-shrink-0">
+                    <span class="text-caption-wa text-grey-darken-1 font-weight-bold text-uppercase">Arsip {{ store.currentMenu }}</span>
+                    <v-chip size="x-small" color="grey-lighten-3" variant="flat" class="text-grey-darken-2 font-weight-bold">Terbaca {{ pipelineResult.data.length }} dari {{ pipelineResult.totalItems }}</v-chip>
+                </div>
+
+                <div class="flex-grow-1 overflow-y-auto px-3 py-1 scroll-aman" @scroll="handleListScroll">
+                    <v-list class="bg-transparent pa-0">
+                        <div v-if="pipelineResult.data.length === 0" class="text-center text-caption-wa text-grey py-6">Tidak ada data untuk kriteria ini.</div>
+                        
+                        <v-list-item v-for="item in pipelineResult.data" :key="item.id" class="bg-white rounded-xl mb-2 border-sm border-grey-lighten-3 pa-2" @dblclick="sendWhatsApp(item)">
+                            
+                            <div v-if="store.currentMenu === 'pelanggan'" class="d-flex justify-space-between align-center w-100">
+                                <div><div class="text-title-wa">{{ item.nama }}</div><div class="text-caption-wa text-grey">📱 {{ item.hp }}</div></div>
+                                <v-btn icon="mdi-trash-can-outline" variant="text" size="small" color="red-lighten-1" :disabled="store.isLoading" @click="deleteData(item.id)"></v-btn>
+                            </div>
+
+                            <div v-if="store.currentMenu === 'penjualan'" class="d-flex justify-space-between align-center w-100">
+                                <div class="flex-grow-1 min-width-0">
+                                    <div class="d-flex justify-space-between text-caption-wa text-grey mb-1"><span>{{ item.tgl }}</span><v-chip size="x-small" color="teal-lighten-5" variant="flat" class="text-teal-darken-3 font-weight-bold" style="height:18px;">👤 {{ getPelangganName(item.pelangganId) }}</v-chip></div>
+                                    <div class="text-title-wa text-truncate pr-2 text-grey-darken-4">{{ item.barang }}</div>
+                                    <div class="text-caption-wa font-weight-bold text-teal-darken-2 mt-0.5">Total: Rp{{ item.total.toLocaleString() }}</div>
+                                </div>
+                                <v-btn icon="mdi-trash-can-outline" variant="text" size="small" color="red-lighten-1" :disabled="store.isLoading" @click.stop="deleteData(item.id)"></v-btn>
+                            </div>
+
+                            <div v-if="store.currentMenu === 'kas'" class="d-flex justify-space-between align-center w-100">
+                                <div>
+                                    <div class="text-caption-wa text-grey">{{ item.tgl }}</div>
+                                    <div class="text-title-wa text-grey-darken-4">{{ formatKeteranganKas(item) }}</div>
+                                    <div :class="item.jenis === 'masuk' ? 'text-teal-darken-2' : 'text-red-darken-1'" class="text-caption-wa font-weight-bold mt-0.5">
+                                        {{ item.jenis === 'masuk' ? '▲ Masuk' : '▼ Keluar' }} | Rp{{ item.nominal.toLocaleString() }}
+                                    </div>
+                                </div>
+                                <v-btn icon="mdi-trash-can-outline" variant="text" size="small" color="red-lighten-1" :disabled="store.isLoading" @click="deleteData(item.id)"></v-btn>
+                            </div>
+
+                            <div v-if="store.currentMenu === 'produksi'" class="d-flex justify-space-between align-center w-100 pa-1">
+                                <div class="flex-grow-1 min-width-0">
+                                    <div class="text-caption-wa text-grey mb-1 font-weight-medium">📅 {{ item.tgl }}</div>
+                                    <div class="d-flex align-center mb-1">
+                                        <v-icon size="18" color="orange-darken-2" class="mr-1.5">mdi-leaf</v-icon>
+                                        <div class="text-body-2 text-grey-darken-3">Bahan: <span class="font-weight-bold">{{ item.bahan }}</span> <span class="text-grey ml-1">({{ item.qty_bahan }})</span></div>
+                                    </div>
+                                    <div class="d-flex align-center">
+                                        <v-icon size="18" color="teal-darken-1" class="mr-1.5">mdi-package-variant-closed</v-icon>
+                                        <div class="text-title-wa text-teal-darken-4">Hasil: <span class="font-weight-bold">{{ item.produk }}</span> <span class="text-teal-darken-2 text-caption-wa ml-1">({{ item.qty_produk }} Pcs)</span></div>
+                                    </div>
+                                </div>
+                                <v-btn icon="mdi-trash-can-outline" variant="text" size="small" color="red-lighten-1" :disabled="store.isLoading" @click="deleteData(item.id)"></v-btn>
+                            </div>
+
+                        </v-list-item>
+
+                        <div v-if="pipelineResult.data.length < pipelineResult.totalItems" class="text-center text-caption-wa text-grey py-3 font-weight-bold">
+                            Menggulung data lama...
+                        </div>
+                    </v-list>
+                </div>
+
+            </v-main>
+
+            <div v-if="store.showAddDialog" class="top-sheet-overlay" @click="store.showAddDialog = false"></div>
+            <v-expand-transition>
+                <v-card v-if="store.showAddDialog" class="top-sheet-card pa-4 bg-white">
+                    <div class="d-flex justify-space-between align-center mb-3">
+                        <div class="text-title-wa text-teal-darken-3 text-uppercase font-weight-bold">Tambah Catatan {{ store.currentMenu }}</div>
+                        <v-btn icon="mdi-close" size="small" variant="text" color="grey" @click="store.showAddDialog = false"></v-btn>
+                    </div>
+                    
+                    <form @submit.prevent="submitForm">
+                        <div v-if="store.currentMenu === 'pelanggan'">
+                            <v-text-field v-model="store.forms.pelanggan.nama" placeholder="Nama Pelanggan" variant="solo" flat density="compact" hide-details class="mb-3" required></v-text-field>
+                            <v-text-field v-model="store.forms.pelanggan.hp" placeholder="No. WhatsApp" type="tel" variant="solo" flat density="compact" hide-details class="mb-4" required></v-text-field>
+                        </div>
+
+                        <div v-if="store.currentMenu === 'penjualan'">
+                            <v-row dense class="mb-2">
+                                <v-col cols="5"><v-text-field v-model="store.forms.penjualan.tgl" type="date" variant="solo" flat density="compact" hide-details required></v-text-field></v-col>
+                                <v-col cols="7"><v-select v-model="store.forms.penjualan.pelangganId" :items="store.lists.pelanggan" item-title="nama" item-value="id" label="Pilih Pelanggan" variant="solo" flat density="compact" hide-details required></v-select></v-col>
+                            </v-row>
+                            <v-row dense class="mb-2 align-center">
+                                <v-col cols="5"><v-text-field v-model="store.forms.penjualan.barang" placeholder="Nama Barang" variant="solo" flat density="compact" hide-details required></v-text-field></v-col>
+                                <v-col cols="3"><v-text-field v-model.number="store.forms.penjualan.qty" type="number" min="1" placeholder="Qty" variant="solo" flat density="compact" hide-details required></v-text-field></v-col>
+                                <v-col cols="4"><v-text-field v-model.number="store.forms.penjualan.harga" type="number" min="0" placeholder="Harga" variant="solo" flat density="compact" hide-details required></v-text-field></v-col>
+                            </v-row>
+                            <v-btn :loading="store.isAjaxLoading" block size="small" variant="tonal" color="teal-darken-2" rounded="lg" class="mb-2 font-weight-bold" @click="dispatchAddToCart">
+                                <v-icon size="small" class="mr-1">mdi-cart-plus</v-icon> Masukkan Ke Keranjang
+                            </v-btn>
+                            <v-card flat v-if="store.cart.length > 0" class="bg-grey-lighten-4 rounded-lg pa-2 mb-2 max-h-32 overflow-y-auto scroll-aman">
+                                <div v-for="(item, idx) in store.cart" :key="idx" class="d-flex justify-space-between align-center text-caption-wa mb-1">
+                                    <span class="text-truncate font-weight-bold text-grey-darken-4" style="max-width: 140px;">{{ item.barang }}</span>
+                                    <span>x{{ item.qty }}</span>
+                                    <span class="font-weight-medium">Rp{{ (item.qty * item.harga).toLocaleString() }}</span>
+                                    <v-btn icon="mdi-minus-circle-outline" size="x-small" variant="text" color="red-lighten-1" @click="store.cart.splice(idx, 1)"></v-btn>
+                                </div>
+                            </v-card>
+                            <div class="text-right text-title-wa text-teal-darken-2 font-weight-bold mb-3">Subtotal: Rp{{ cartTotal.toLocaleString() }}</div>
+                        </div>
+
+                        <div v-if="store.currentMenu === 'kas'">
+                            <v-row dense class="mb-2">
+                                <v-col cols="5"><v-text-field v-model="store.forms.kas.tgl" type="date" variant="solo" flat density="compact" hide-details required></v-text-field></v-col>
+                                <v-col cols="7"><v-select v-model="store.forms.kas.jenis" :items="[{t:'Masuk (+)', v:'masuk'}, {t:'Keluar (-)', v:'keluar'}]" item-title="t" item-value="v" label="Jenis Kas" variant="solo" flat density="compact" hide-details required></v-select></v-col>
+                            </v-row>
+                            <v-text-field v-model="store.forms.kas.keterangan" placeholder="Keterangan transaksi" variant="solo" flat density="compact" hide-details class="mb-2" required></v-text-field>
+                            <v-text-field v-model.number="store.forms.kas.nominal" placeholder="Nominal Rupiah" type="number" min="0" variant="solo" flat density="compact" hide-details class="mb-4" required></v-text-field>
+                        </div>
+
+                        <div v-if="store.currentMenu === 'produksi'">
+                            <v-text-field v-model="store.forms.produksi.tgl" type="date" variant="solo" flat density="compact" hide-details class="mb-2" required></v-text-field>
+                            <v-row dense class="mb-2">
+                                <v-col cols="7"><v-text-field v-model="store.forms.produksi.bahan" placeholder="Bahan Baku" variant="solo" flat density="compact" hide-details required></v-text-field></v-col>
+                                <v-col cols="5"><v-text-field v-model.number="store.forms.produksi.qty_bahan" type="number" min="1" placeholder="Qty" variant="solo" flat density="compact" hide-details required></v-text-field></v-col>
+                            </v-row>
+                            <v-row dense class="mb-3">
+                                <v-col cols="7"><v-text-field v-model="store.forms.produksi.produk" placeholder="Produk Jadi" variant="solo" flat density="compact" hide-details required></v-text-field></v-col>
+                                <v-col cols="5"><v-text-field v-model.number="store.forms.produksi.qty_produk" type="number" min="1" placeholder="Qty" variant="solo" flat density="compact" hide-details required></v-text-field></v-col>
+                            </v-row>
+                        </div>
+
+                        <v-btn type="submit" :loading="store.isLoading" :disabled="store.currentMenu === 'penjualan' && store.cart.length === 0" block color="teal-darken-1" size="large" rounded="xl" class="font-weight-bold elevation-0">Simpan Catatan</v-btn>
+                    </form>
+                </v-card>
+            </v-expand-transition>
+
+            <div class="bottom-nav-custom">
+                <button class="nav-item-btn" :class="{'active-nav': store.currentMenu === 'penjualan'}" @click="changeTab('penjualan')">
+                    <v-icon size="24">mdi-cart-outline</v-icon>
+                </button>
+                <button class="nav-item-btn" :class="{'active-nav': store.currentMenu === 'kas'}" @click="changeTab('kas')">
+                    <v-icon size="24">mdi-wallet-outline</v-icon>
+                </button>
+                <button class="center-add-btn" @click="store.showAddDialog = true">
+                    <v-icon size="28">mdi-plus</v-icon>
+                </button>
+                <button class="nav-item-btn" :class="{'active-nav': store.currentMenu === 'produksi'}" @click="changeTab('produksi')">
+                    <v-icon size="24">mdi-sprout-outline</v-icon>
+                </button>
+                <button class="nav-item-btn" :class="{'active-nav': store.currentMenu === 'pelanggan'}" @click="changeTab('pelanggan')">
+                    <v-icon size="24">mdi-account-circle-outline</v-icon>
+                </button>
+            </div>
+
+        </v-layout>
+    </v-app>
+
+    <script>
+        const { createApp, reactive, computed, onMounted } = Vue;
+        const { createVuetify } = Vuetify;
+        const vuetify = createVuetify();
+
+        const db = new Dexie("TokoAndroidDB_TopSheet_FinalFix");
+        db.version(1).stores({
+            pelanggan: '++id, nama, hp',
+            penjualan: '++id, tgl, pelangganId, barang, total',
+            kas: '++id, tgl, jenis, keterangan, nominal, isAutomated, pelangganId',
+            produksi: '++id, tgl, bahan, produk'
+        });
+
+        const store = reactive({
+            currentMenu: 'penjualan', searchQuery: '', showSettings: false, isLoading: false, isAjaxLoading: false,
+            activeFilter: 'all', showRangeDialog: false, showAddDialog: false,
+            customRange: { start: today(), end: today() },
+            filterOptions: [
+                { label: 'Semua', value: 'all' },
+                { label: 'Hari Ini', value: 'today' },
+                { label: 'Kemarin', value: 'yesterday' },
+                { label: 'Minggu Ini', value: 'thisWeek' },
+                { label: 'Minggu Kemarin', value: 'lastWeek' },
+                { label: 'Rentang Tanggal 📅', value: 'range' }
+            ],
+            lists: { pelanggan: [], penjualan: [], kas: [], produksi: [] },
+            cart: [], lazyLimit: 10, toast: { show: false, message: '' },
+            forms: {
+                pelanggan: { nama: '', hp: '' },
+                penjualan: { tgl: today(), pelangganId: '', barang: 'Tempe', qty: 1, harga: 2500 }, 
+                kas: { tgl: today(), jenis: 'masuk', keterangan: '', nominal: '' },
+                produksi: { tgl: today(), bahan: 'Kedelai', qty_bahan: 1, produk: 'Tempe', qty_produk: 1 } 
+            }
+        });
+
+        function today() { return new Date().toISOString().split('T')[0]; }
+        function getDateOffset(days) {
+            const d = new Date(); d.setDate(d.getDate() + days);
+            return d.toISOString().split('T')[0];
+        }
+
+        createApp({
+            setup() {
+                const showToast = msg => { store.toast.message = msg; store.toast.show = true; };
+                const loadData = async () => { 
+                    store.lists.pelanggan = await db.pelanggan.toArray();
+                    store.lists.penjualan = await db.penjualan.toArray();
+                    store.lists.kas = await db.kas.toArray();
+                    store.lists.produksi = await db.produksi.toArray();
+                };
+
+                const resetLazyLoad = () => { store.lazyLimit = 10; };
+                const changeTab = tab => { store.currentMenu = tab; resetLazyLoad(); };
+                const setFilter = value => {
+                    store.activeFilter = value;
+                    if (value === 'range') store.showRangeDialog = true;
+                    resetLazyLoad();
+                };
+
+                const handleListScroll = event => {
+                    const { scrollTop, scrollHeight, clientHeight } = event.target;
+                    if (scrollHeight - scrollTop - clientHeight < 20) {
+                        if (store.lazyLimit < filteredList.value.length) { store.lazyLimit += 10; }
+                    }
+                };
+
+                const formatKeteranganKas = item => {
+                    if (item.isAutomated) { return `Penjualan - ${getPelangganName(item.pelangganId)}`; }
+                    return item.keterangan;
+                };
+
+                const dispatchAddToCart = async () => {
+                    const f = store.forms.penjualan;
+                    if(!f.barang || !f.harga) return;
+                    store.isAjaxLoading = true;
+                    await new Promise(r => setTimeout(r, 150));
+                    const target = store.cart.find(i => i.barang.toLowerCase() === f.barang.toLowerCase());
+                    if (target) { target.qty += f.qty; } 
+                    else { store.cart.push({ barang: f.barang, qty: f.qty, harga: f.harga }); }
+                    showToast(`${f.barang} dimasukkan.`);
+                    if (f.barang === 'Tempe') { f.barang = 'Balen'; f.harga = 2000; } else { f.barang = 'Tempe'; f.harga = 2500; }
+                    f.qty = 1; store.isAjaxLoading = false;
+                };
+
+                const cartTotal = computed(() => store.cart.reduce((s, i) => s + (i.qty * i.harga), 0));
+
+                const filteredList = computed(() => {
+                    const q = store.searchQuery.toLowerCase();
+                    const m = store.currentMenu;
+                    const searchRules = {
+                        pelanggan: i => i.nama.toLowerCase().includes(q) || i.hp.includes(q),
+                        penjualan: i => i.barang.toLowerCase().includes(q) || getPelangganName(i.pelangganId).toLowerCase().includes(q),
+                        kas: i => formatKeteranganKas(i).toLowerCase().includes(q),
+                        produksi: i => i.bahan.toLowerCase().includes(q) || i.produk.toLowerCase().includes(q)
+                    };
+                    
+                    let baseData = [...(store.lists[m] || [])].reverse().filter(searchRules[m]);
+                    if (m === 'pelanggan') return baseData; 
+
+                    const tglHariIni = today();
+                    const tglKemarin = getDateOffset(-1);
+                    const skrg = new Date();
+                    const mingguIniStart = new Date(skrg.setDate(skrg.getDate() - skrg.getDay())).toISOString().split('T')[0];
+                    const skrg2 = new Date();
+                    const mingguLaluStart = new Date(skrg2.setDate(skrg2.getDate() - skrg2.getDay() - 7)).toISOString().split('T')[0];
+                    const mingguLaluEnd = new Date(skrg2.setDate(skrg2.getDate() - skrg2.getDay() - 1)).toISOString().split('T')[0];
+
+                    return baseData.filter(item => {
+                        if (store.activeFilter === 'all') return true;
+                        if (store.activeFilter === 'today') return item.tgl === tglHariIni;
+                        if (store.activeFilter === 'yesterday') return item.tgl === tglKemarin;
+                        if (store.activeFilter === 'thisWeek') return item.tgl >= mingguIniStart && item.tgl <= tglHariIni;
+                        if (store.activeFilter === 'lastWeek') return item.tgl >= mingguLaluStart && item.tgl <= mingguLaluEnd;
+                        if (store.activeFilter === 'range') return item.tgl >= store.customRange.start && item.tgl <= store.customRange.end;
+                        return true;
+                    });
+                });
+
+                const kasSummary = computed(() => {
+                    let masuk = 0, keluar = 0;
+                    if (store.currentMenu === 'kas') {
+                        filteredList.value.forEach(i => { if (i.jenis === 'masuk') masuk += i.nominal; else keluar += i.nominal; });
+                    }
+                    return { masuk, keluar, netto: masuk - keluar };
+                });
+
+                const pipelineResult = computed(() => {
+                    return { data: filteredList.value.slice(0, store.lazyLimit), totalItems: filteredList.value.length };
+                });
+
+                const submitForm = async () => {
+                    if (store.isLoading) return; store.isLoading = true;
+                    const m = store.currentMenu; let data = { ...store.forms[m] };
+                    try {
+                        await db.transaction('rw', [db.kas, db[m]], async () => {
+                            if (m === 'penjualan') {
+                                // UPDATE TERBARU: Menyimpan format Qty x Harga Satuan = Total Harga per Baris
+                                const rincianString = store.cart.map(i => `${i.barang} (${i.qty}xRp${i.harga.toLocaleString()})`).join(', ');
+                                const totalAkhir = cartTotal.value;
+                                await db.penjualan.add({ tgl: data.tgl, pelangganId: data.pelangganId, barang: rincianString, total: totalAkhir });
+                                await db.kas.add({ tgl: data.tgl, jenis: 'masuk', keterangan: `Penjualan Multi: ${rincianString}`, nominal: totalAkhir, isAutomated: true, pelangganId: data.pelangganId });
+                                store.cart = []; store.forms.penjualan = { tgl: today(), pelangganId: '', barang: 'Tempe', qty: 1, harga: 2500 };
+                            } else { await db[m].add(data); }
+                        });
+                        showToast("Tersimpan."); store.showAddDialog = false; resetForm(m); resetLazyLoad(); await loadData();
+                    } catch (err) { showToast("Gagal!"); } finally { store.isLoading = false; }
+                };
+
+                const deleteData = async id => {
+                    if (store.isLoading || !confirm("Hapus data ini?")) return;
+                    store.isLoading = true; const m = store.currentMenu;
+                    try {
+                        await db.transaction('rw', [db.kas, db[m]], async () => {
+                            if (m === 'penjualan') {
+                                const p = await db.penjualan.get(id);
+                                if (p) {
+                                    const k = await db.kas.where({ tgl: p.tgl, nominal: p.total, isAutomated: true }).first();
+                                    if (k) await db.kas.delete(k.id);
+                                }
+                            }
+                            await db[m].delete(id);
+                        });
+                        showToast("Terhapus."); await loadData();
+                    } catch (err) { showToast("Gagal!"); } finally { store.isLoading = false; }
+                };
+
+                const getPelangganName = id => (store.lists.pelanggan.find(x => x.id === id) || {nama: 'Umum'}).nama;
+                
+                const sendWhatsApp = i => {
+                    const targetPhone = "6285963172893"; 
+                    const namaPelanggan = getPelangganName(i.pelangganId);
+                    const itemLines = i.barang.split(', ').map(item => `  ${item}`).join('\n');
+                    
+                    const formatStruk = "```" + 
+`============================
+          INVOICE           
+============================
+Tgl      : ${i.tgl}
+Pelanggan: ${namaPelanggan}
+----------------------------
+Daftar Barang:
+${itemLines}
+----------------------------
+TOTAL    : Rp ${i.total.toLocaleString()}
+============================
+Terimakasih sudah berbelanja
+Ida 0856-0627-1720` + "```";
+
+                    window.open(`https://api.whatsapp.com/send?phone=${targetPhone}&text=${encodeURIComponent(formatStruk)}`, '_blank');
+                };
+
+                const resetForm = m => {
+                    const d = { 
+                        pelanggan: { nama: '', hp: '' }, 
+                        penjualan: { tgl: today(), pelangganId: '', barang: 'Tempe', qty: 1, harga: 2500 }, 
+                        kas: { tgl: today(), jenis: 'masuk', keterangan: '', nominal: '' }, 
+                        produksi: { tgl: today(), bahan: 'Kedelai', qty_bahan: 1, produk: 'Tempe', qty_produk: 1 } 
+                    };
+                    store.forms[m] = d[m];
+                };
+
+                const handleExport = () => {
+                    const d = store.lists[store.currentMenu]; if(!d || !d.length) return;
+                    const csv = "data:text/csv;charset=utf-8," + [Object.keys(d[0]).join(","), ...d.map(r => Object.values(r).map(v => `"${v}"`).join(","))].join("\n");
+                    const a = document.createElement("a"); a.href = encodeURI(csv); a.download = `${store.currentMenu}.csv`; a.click();
+                };
+
+                const handleImport = event => {
+                    const file = event.target.files[0]; if (!file) return;
+                    const r = new FileReader(); r.onload = async e => {
+                        try {
+                            store.isLoading = true;
+                            const lines = e.target.result.split("\n").filter(l => l.trim() !== ""), headers = lines[0].split(",").map(h => h.trim());
+                            let dataBulk = [];
+                            for(let i=1; i<lines.length; i++) {
+                                let obj = {}, vals = lines[i].split(",").map(v => v.replace(/^"|"$/g, '').trim());
+                                headers.forEach((h, idx) => { if(h !== 'id') obj[h] = isNaN(vals[idx]) ? vals[idx] : Number(vals[idx]); });
+                                dataBulk.push(obj);
+                            }
+                            await db[store.currentMenu].bulkAdd(dataBulk); showToast(`Impor Berhasil.`); resetLazyLoad(); await loadData();
+                        } catch (err) { alert("Eror CSV!"); } finally { store.isLoading = false; event.target.value = ''; }
+                    }; r.readAsText(file);
+                };
+
+                const backupJSON = () => { 
+                    const payload = { pelanggan: store.lists.pelanggan, penjualan: store.lists.penjualan, kas: store.lists.kas, produksi: store.lists.produksi };
+                    const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(payload)); a.download = `Backup.json`; a.click(); 
+                };
+                
+                const restoreJSON = event => {
+                    const file = event.target.files[0]; if (!file) return;
+                    const r = new FileReader(); r.onload = async e => {
+                        try {
+                            store.isLoading = true; const data = JSON.parse(e.target.result);
+                            for(const s in data) { if (db[s]) { await db[s].clear(); for(const i of data[s]) { delete i.id; await db[s].add(i); } } }
+                            showToast("Restore Sukses."); setTimeout(() => location.reload(), 500);
+                        } catch (err) { alert("JSON Rusak!"); } finally { store.isLoading = false; }
+                    }; r.readAsText(file);
+                };
+
+                onMounted(loadData);
+                return { store, pipelineResult, submitForm, deleteData, getPelangganName, sendWhatsApp, handleExport, handleImport, backupJSON, restoreJSON, dispatchAddToCart, cartTotal, setFilter, kasSummary, changeTab, handleListScroll, resetLazyLoad, formatKeteranganKas };
+            }
+        }).use(vuetify).mount('#app');
+        // Mendaftarkan service worker agar aplikasi bisa berjalan offline
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('Service Worker Terdaftar!', reg))
+                    .catch(err => console.log('Gagal Daftar Service Worker', err));
+            });
+        }
+  </script>
+</body>
+</html>
