@@ -30,13 +30,24 @@ jobs:
       - name: Build with Cordova
         run: |
           npm install -g cordova
-          cordova create myApp com.example.myapp MyApp
+          
+          # UPDATE: Mengubah ID menjadi com.tempe.legend dan Nama menjadi "Tempe Legend"
+          cordova create myApp com.tempe.legend "Tempe Legend"
+          
           cd myApp
           cordova platform add android
+          
+          # Hapus folder www bawaan Cordova dan ganti dengan folder www milik Anda
           rm -rf www
           cp -r ../www .
+          
+          # UPDATE: Menyisipkan konfigurasi Ikon langsung ke config.xml Cordova
+          # Ini akan memaksa Cordova menggunakan icon-192.png sebagai logo aplikasi
+          sed -i '/<\/widget>/i \    <icon src="www/icon-192.png" />' config.xml
+          
           # Menambahkan gradle.properties agar build lebih stabil
           echo "org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m" >> gradle.properties
+          
           cordova build android --debug
 
       # 5. Gunakan v4 untuk upload artifact
