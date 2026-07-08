@@ -1,7 +1,7 @@
 {
   "name": "tempe legend",
   "short_name": "tempe",
-  "description": "Aplikasi kasir dan manajemen stok ringan",
+  "description": "Aplikasi kasir dan manajemen ringan",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#f8fafc",
