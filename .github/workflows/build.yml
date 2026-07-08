@@ -1,4 +1,4 @@
-name: Build APK
+Name: Build APK
 
 on:
   push:
@@ -31,7 +31,7 @@ jobs:
         run: |
           npm install -g cordova
           
-          # UPDATE: Mengubah ID menjadi com.tempe.legend dan Nama menjadi "Tempe Legend"
+          # Mengubah ID menjadi com.tempe.legend dan Nama menjadi "Tempe Legend"
           cordova create myApp com.tempe.legend "Tempe Legend"
           
           cd myApp
@@ -41,19 +41,33 @@ jobs:
           rm -rf www
           cp -r ../www .
           
-          # UPDATE: Menyisipkan konfigurasi Ikon langsung ke config.xml Cordova
-          # Ini akan memaksa Cordova menggunakan icon-192.png sebagai logo aplikasi
+          # 1. Menyisipkan konfigurasi Ikon ke config.xml
           sed -i '/<\/widget>/i \    <icon src="www/icon-192.png" />' config.xml
+          
+          # 2. Menyisipkan konfigurasi Splash Screen ke config.xml
+          sed -i '/<\/widget>/i \    <preference name="SplashScreen" value="screen" />' config.xml
+          sed -i '/<\/widget>/i \    <preference name="AutoHideSplashScreen" value="true" />' config.xml
+          sed -i '/<\/widget>/i \    <preference name="SplashScreenDelay" value="3000" />' config.xml
+          sed -i '/<\/widget>/i \    <splash src="www/icon-192.png" />' config.xml
           
           # Menambahkan gradle.properties agar build lebih stabil
           echo "org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m" >> gradle.properties
           
           cordova build android --debug
 
-      # 5. Gunakan v4 untuk upload artifact
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      # 5. Membuat GitHub Release dan Mengunggah APK secara Otomatis
+      - name: Create Release and Upload APK
+        uses: softprops/action-gh-release@v2
         with:
-          name: app-debug
-          path: myApp/platforms/android/app/build/outputs/apk/debug/app-debug.apk
+          tag_name: v1.0.${{ github.run_number }}
+          name: Release Tempe Legend v1.0.${{ github.run_number }}
+          body: |
+            Build otomatis dari GitHub Actions.
+            - Splash screen dan ikon aplikasi telah diperbarui.
+            - Status Build: Sukses.
+          draft: false
+          prerelease: false
+          files: myApp/platforms/android/app/build/outputs/apk/debug/app-debug.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
