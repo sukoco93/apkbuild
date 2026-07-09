@@ -82,7 +82,7 @@ jobs:
             - Status Build: Sukses.
           draft: false
           prerelease: false
-          files: myApp/platforms/android/app/build/outputs/apk/debug/app-debug.apk
+          files: myApp/platforms/android/app/build/outputs/apk/debug/tempe.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
