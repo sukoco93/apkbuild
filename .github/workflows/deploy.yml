@@ -1,0 +1,19 @@
+name: Deploy Website ke Pages
+
+on:
+  push:
+    branches: [ "main" ]   # sesuaikan jika branch utama Anda beda
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      # Ambil semua file dari folder www, dan deploy ke branch gh-pages
+      - name: Deploy ke branch gh-pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./www   # <--- Cukup arahkan ke folder www!
+          publish_branch: gh-pages
