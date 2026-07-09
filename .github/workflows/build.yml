@@ -47,19 +47,28 @@ jobs:
           rm -rf www
           cp -r ../www .
           
+          # TAMBAHAN: Paksa install plugin splashscreen resmi agar perintahnya terbaca
+          cordova plugin add cordova-plugin-splashscreen
+          
           # 1. Menyisipkan konfigurasi Ikon ke config.xml
           sed -i '/<\/widget>/i \    <icon src="www/icon-192.png" />' config.xml
           
-          # 2. Menyisipkan konfigurasi Splash Screen ke config.xml
+          # 2. PERBAIKAN: Menyisipkan konfigurasi Splash Screen yang kompatibel untuk Android Lama & Baru
           sed -i '/<\/widget>/i \    <preference name="SplashScreen" value="screen" />' config.xml
           sed -i '/<\/widget>/i \    <preference name="AutoHideSplashScreen" value="true" />' config.xml
           sed -i '/<\/widget>/i \    <preference name="SplashScreenDelay" value="3000" />' config.xml
+          sed -i '/<\/widget>/i \    <preference name="FadeSplashScreen" value="true" />' config.xml
+          sed -i '/<\/widget>/i \    <preference name="FadeSplashScreenDuration" value="300" />' config.xml
+          
+          # Menentukan gambar splash screen untuk global dan platform android
           sed -i '/<\/widget>/i \    <splash src="www/icon-192.png" />' config.xml
+          sed -i '/<\/platform>/i \        <splash src="www/icon-192.png" />' config.xml
           
           # Menambahkan gradle.properties agar build lebih stabil
           echo "org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m" >> gradle.properties
           
           cordova build android --debug
+          
 
       # 5. Membuat GitHub Release dan Mengunggah APK secara Otomatis
       - name: Create Release and Upload APK
